@@ -67,16 +67,16 @@ program en234fea
 !   Homework 3: develop and test an ABAQUS user element implementing 2D linear elasticity with full integration
 
 !   Simple test of a 2D plane element
-!  infil = 'input_files/Abaqus_uel_linear_elastic_2d.in'
-!  outfil = 'Output_files/Abaqus_uel_linear_elastic_2d.out'
+  infil = 'input_files/Abaqus_uel_linear_elastic_2d.in'
+  outfil = 'Output_files/Abaqus_uel_linear_elastic_2d.out'
 
 !  Solve hole-in-a-plate problem with 4 noded quadrilateral elements
 !   infil = 'input_files/Abaqus_uel_holeplate_2d_quad4.in'
 !   outfil = 'Output_files/Abaqus_uel_holeplate_2d_quad4.out'
 
 !  Solve hole-in-a-plate problem with 8 noded quads
-   infil = 'input_files/Abaqus_uel_holeplate_2d_quad8.in'
-   outfil = 'Output_files/Abaqus_uel_holeplate_2d_quad8.out'
+!   infil = 'input_files/Abaqus_uel_holeplate_2d_quad8.in'
+!   outfil = 'Output_files/Abaqus_uel_holeplate_2d_quad8.out'
 
 !  Solve hole-in-a-plate problem with 3 noded triangles
 !   infil = 'input_files/Abaqus_uel_holeplate_2d_tri3.in'
