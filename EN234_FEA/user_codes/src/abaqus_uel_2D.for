@@ -11,7 +11,7 @@
 !          abq_UEL_1D_integrationpoints(n_points, n_nodes, xi, w)  = defines integration points for 1D line integral
 !=========================== ABAQUS format user element subroutine ===================
 
-      SUBROUTINE UEL_2D(RHS,AMATRX,SVARS,ENERGY,NDOFEL,NRHS,NSVARS,
+      SUBROUTINE UEL(RHS,AMATRX,SVARS,ENERGY,NDOFEL,NRHS,NSVARS,
      1     PROPS,NPROPS,COORDS,MCRD,NNODE,U,DU,V,A,JTYPE,TIME,DTIME,
      2     KSTEP,KINC,JELEM,PARAMS,NDLOAD,JDLTYP,ADLMAG,PREDEF,NPREDF,
      3     LFLAGS,MLVARX,DDLMAG,MDLOAD,PNEWDT,JPROPS,NJPROP,PERIOD)
@@ -142,8 +142,61 @@
       if (NNODE == 9) n_points = 9             ! Quadratic rect
 
     ! Write your code for a 2D element below
+      
+      call abq_UEL_2D_integrationpoints(n_points, n_nodes, xi, w)
+      
+      RHS(1:MLVARX,1) = 0.d0
+      AMATRX(1:NDOFEL,1:NDOFEL) = 0.d0
+      
+      D = 0.d0
+      E = PROPS(1)
+      xnu = PROPS(2)
+      D12 = xnu*E/( (1+xnu)*(1-2.D0*xnu) )
+      D11 = (1-xnu)*E/( (1+xnu)*(1-2.D0*xnu) )
+      D44 = (1.D0-xnu)*E/( (1+xnu)*(1-2.D0*xnu) )
+      D(1:3,1:2) = D12
+      D(1,1) = D11
+      D(2,2) = D11
+      D(3,3) = D11
+      D(4,4) = D44
+      
+      Energy(1:8) = 0.d0
+      
+      do kint = 1, n_points
+          call abq_UEL_2D_shapefunctions(xi(1:2,kint),NNODE,N,dNdxi)
+          dxdxi = matmul(coords(1:2,1:NNODE),dNdxi(1:NNODE,1:2))
+          call abq_inverse_LU(dxdxi,dxidx,2)
+          dNdx(1:NNODE,1:2) = matmul(dNdxi(1:NNODE,1:2),dxidx)
+          B = 0.d0
+          B(1,1:2*NNODE-1:2) = dNdx(1:NNODE,1)
+          B(2,2:2*NNODE:2) = dNdx(1:NNODE, 2)
+          B(4,1:2*NNODE-1:2) = dNdx(1:NNODE, 2)
+          B(4,2:2*NNODE:2) = dNdx(1:NNODE, 1)
+          
+          strain = matmul(B(1:4,1:2*NNODE), U(1:2*NNODE))
+          stress = matmul(D, strain)
+          RHS(1:2*NNODE, 1) = RHS(1:2*NNODE,1)
+     1       -matmul(transpose(B(1:4,1:2*NNODE)),stress(1:4))*w(kint)
+     2                      *determinant
+          
+          AMATRX(1:2*NNODE,1:2*NNODE) = AMATRX(1:2*NNODE,1:2*NNODE) +
+     1         matmul(transpose(B(1:4,1:2*NNODE)),matmul(D,B(1:4,1:2
+     2                  *NNODE)))*w(kint)*determinant
+          
+          Energy(2) = Energy(2) + 0.5*dot_product(stress,strain)*w(kint)
+     1       *determinant
+          
+          SVARS(4*kint-3: 4*kint) = stress(1:4)
+      
+          
+      end do
+      
+      PNEWT = 1.d0
+      
+      return
+      
 
-      END SUBROUTINE UEL_2D
+      END SUBROUTINE UEL
 
 
 
