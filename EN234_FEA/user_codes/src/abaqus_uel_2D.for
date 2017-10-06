@@ -170,7 +170,7 @@
           dxidx(2,2) = dxdxi(1,1)
           dxidx(1,2) = -dxdxi(1,2)
           dxidx(2,1) = -dxdxi(2,1)
-          !         call abq_inverse_LU(dxdxi,dxidx,2)
+
           dNdx(1:NNODE,1:2) = matmul(dNdxi(1:NNODE,1:2),dxidx)
           B = 0.d0
           B(1,1:2*NNODE-1:2) = dNdx(1:NNODE,1)
