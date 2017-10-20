@@ -148,7 +148,11 @@
       AMATRX(1:NDOFEL,1:NDOFEL) = 0.d0
       ktemp(1:2*NNODE+4,1:2*NNODE+4) = 0.d0
       kuu(1:2*NNODE,1:2*NNODE) = 0.d0
+      kua(1:2*NNODE,1:4) = 0.d0
       kau(1:4,1:2*NNODE) = 0.d0
+      kaa(1:4,1:4) = 0.d0
+      kaainv(1:4,1:4) = 0.d0
+      alpha(1:4) = 0.d0
       D = 0.d0
       E = PROPS(1)
       xnu = PROPS(2)
@@ -162,6 +166,10 @@
       D(4,4) = D44
       
       Energy(1:8) = 0.d0
+      
+      call abq_UEL_2D_shapefunctions([0.d0,0.d0],NNODE,N,dNdxi)
+          dxdxi = matmul(coords(1:2,1:NNODE),dNdxi(1:NNODE,1:2))
+          det0 = dxdxi(1,1)*dxdxi(2,2) - dxdxi(2,1)*dxdxi(1,2)
       
       do kint = 1, n_points
           call abq_UEL_2D_shapefunctions(xi(1:2,kint),NNODE,N,dNdxi)
@@ -189,12 +197,24 @@
           
           ktemp(1:2*NNODE+4,1:2*NNODE+4) = ktemp(1:2*NNODE+4,
      1     1:2*NNODE+4) + matmul(transpose(B(1:4,1:2*NNODE+4)),
-     2      matmul(D,B(1:4,1:2*NNODE+4))) 
+     2      matmul(D,B(1:4,1:2*NNODE+4)))*w(kint)*determinant 
       
       end do
           kuu(1:2*NNODE,1:2*NNODE) = ktemp(1:2*NNODE,1:2*NNODE)
           kua(1:2*NNODE,1:4) = ktemp(1:2*NNODE,2*NNODE+1:2*NNODE+4)
           kau(1:4,1:2*NNODE) = ktemp(2*NNODE+1:2*NNODE+4,1:2*NNODE)
+          kaa(1:4,1:4) = ktemp(2*NNODE+1:2*NNODE+4,2*NNODE+1:2*NNODE+4)
+          kaainv(1,1) = (1/(kaa(1,1)*kaa(2,2)-kaa(1,2)*kaa(2,1)))*
+     1     kaa(2,2)
+          kaainv(2,2) = (1/(kaa(1,1)*kaa(2,2)-kaa(1,2)*kaa(2,1)))*
+     1     kaa(1,1)
+          kaainv(2,1) = -(1/(kaa(1,1)*kaa(2,2)-kaa(1,2)*kaa(2,1)))*
+     1     kaa(2,1)
+          kaainv(1,2) = -(1/(kaa(1,1)*kaa(2,2)-kaa(1,2)*kaa(2,1)))*
+     1     kaa(1,2)
+          
+          alpha(1:4) = -matmul(kaainv,matmul(kau,U(1:2*NNODE)))
+          
           strain = matmul(B(1:4,1:2*NNODE), U(1:2*NNODE))
           stress = matmul(D, strain)
           RHS(1:2*NNODE, 1) = RHS(1:2*NNODE,1)
