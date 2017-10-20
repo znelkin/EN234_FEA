@@ -142,10 +142,15 @@
       if (NNODE == 9) n_points = 9             ! Quadratic rect
 
     ! Write your code for a 2D element below
-      call abq_UEL_2D_integrationpoints(n_points, n_nodes, xi, w)
+      IF (JTYPE == 2) THEN
+      call abq_UEL_2D_integrationpoints(n_points, NNODE, xi, w)
       
       RHS(1:MLVARX,1) = 0.d0
       AMATRX(1:NDOFEL,1:NDOFEL) = 0.d0
+      
+
+      
+      
       ktemp(1:2*NNODE+4,1:2*NNODE+4) = 0.d0
       kuu(1:2*NNODE,1:2*NNODE) = 0.d0
       kua(1:2*NNODE,1:4) = 0.d0
@@ -171,7 +176,10 @@
       call abq_UEL_2D_shapefunctions([0.d0,0.d0],NNODE,N,dNdxi)
           dxdxi = matmul(coords(1:2,1:NNODE),dNdxi(1:NNODE,1:2))
           det0 = dxdxi(1,1)*dxdxi(2,2) - dxdxi(2,1)*dxdxi(1,2)
-      
+
+  
+          
+          
       do kint = 1, n_points
           call abq_UEL_2D_shapefunctions(xi(1:2,kint),NNODE,N,dNdxi)
           dxdxi = matmul(coords(1:2,1:NNODE),dNdxi(1:NNODE,1:2))
@@ -180,6 +188,7 @@
           dxidx(2,2) = dxdxi(1,1)
           dxidx(1,2) = -dxdxi(1,2)
           dxidx(2,1) = -dxdxi(2,1)
+          dxidx = dxidx/determinant
 
           dNdx(1:NNODE,1:2) = matmul(dNdxi(1:NNODE,1:2),dxidx)
           B = 0.d0
@@ -191,10 +200,10 @@
           B(2,2*NNODE+4) = (det0/determinant)*xi(2,kint)*dxidx(2,2)
           B(4,1:2*NNODE-1:2) = dNdx(1:NNODE, 2)
           B(4,2:2*NNODE:2) = dNdx(1:NNODE, 1)
-          B(2,2*NNODE+1) = (det0/determinant)*xi(1,kint)*dxidx(1,2)
-          B(2,2*NNODE+2) = (det0/determinant)*xi(1,kint)*dxidx(1,1)
-          B(2,2*NNODE+3) = (det0/determinant)*xi(2,kint)*dxidx(2,2)
-          B(2,2*NNODE+4) = (det0/determinant)*xi(2,kint)*dxidx(2,2)
+          B(4,2*NNODE+1) = (det0/determinant)*xi(1,kint)*dxidx(1,2)
+          B(4,2*NNODE+2) = (det0/determinant)*xi(1,kint)*dxidx(1,1)
+          B(4,2*NNODE+3) = (det0/determinant)*xi(2,kint)*dxidx(2,2)
+          B(4,2*NNODE+4) = (det0/determinant)*xi(2,kint)*dxidx(2,1)
           
           ktemp(1:2*NNODE+4,1:2*NNODE+4) = ktemp(1:2*NNODE+4,
      1     1:2*NNODE+4) + matmul(transpose(B(1:4,1:2*NNODE+4)),
@@ -205,20 +214,11 @@
           kua(1:2*NNODE,1:4) = ktemp(1:2*NNODE,2*NNODE+1:2*NNODE+4)
           kau(1:4,1:2*NNODE) = ktemp(2*NNODE+1:2*NNODE+4,1:2*NNODE)
           kaa(1:4,1:4) = ktemp(2*NNODE+1:2*NNODE+4,2*NNODE+1:2*NNODE+4)
-          kaainv(1,1) = (1/(kaa(1,1)*kaa(2,2)-kaa(1,2)*kaa(2,1)))*
-     1     kaa(2,2)
-          kaainv(2,2) = (1/(kaa(1,1)*kaa(2,2)-kaa(1,2)*kaa(2,1)))*
-     1     kaa(1,1)
-          kaainv(2,1) = -(1/(kaa(1,1)*kaa(2,2)-kaa(1,2)*kaa(2,1)))*
-     1     kaa(2,1)
-          kaainv(1,2) = -(1/(kaa(1,1)*kaa(2,2)-kaa(1,2)*kaa(2,1)))*
-     1     kaa(1,2)
-          
-          alpha(1:4) = -matmul(kaainv,matmul(kau,U(1:2*NNODE)))
-          strain(1:4) = matmul(B(1:4,1:2*NNODE),U(1:2*NNODE)) +
-     1     matmul(B(1:4,2*NNODE+1:2*NNODE+4),alpha(1:4))
-          stress(1:4) = matmul(D,strain)
-      
+          call abq_inverse_LU(kaa,kaainv,4)
+          alpha(1:4) = -matmul(kaainv(1:4,1:4),
+     1                          matmul(kau(1:4,1:2*NNODE),U(1:2*NNODE)))
+
+        
       do kint = 1, n_points
           call abq_UEL_2D_shapefunctions(xi(1:2,kint),NNODE,N,dNdxi)
           dxdxi = matmul(coords(1:2,1:NNODE),dNdxi(1:NNODE,1:2))
@@ -227,6 +227,7 @@
           dxidx(2,2) = dxdxi(1,1)
           dxidx(1,2) = -dxdxi(1,2)
           dxidx(2,1) = -dxdxi(2,1)
+          dxidx = dxidx/determinant
 
           dNdx(1:NNODE,1:2) = matmul(dNdxi(1:NNODE,1:2),dxidx)
           B = 0.d0
@@ -238,22 +239,82 @@
           B(2,2*NNODE+4) = (det0/determinant)*xi(2,kint)*dxidx(2,2)
           B(4,1:2*NNODE-1:2) = dNdx(1:NNODE, 2)
           B(4,2:2*NNODE:2) = dNdx(1:NNODE, 1)
-          B(2,2*NNODE+1) = (det0/determinant)*xi(1,kint)*dxidx(1,2)
-          B(2,2*NNODE+2) = (det0/determinant)*xi(1,kint)*dxidx(1,1)
-          B(2,2*NNODE+3) = (det0/determinant)*xi(2,kint)*dxidx(2,2)
-          B(2,2*NNODE+4) = (det0/determinant)*xi(2,kint)*dxidx(2,2)
+          B(4,2*NNODE+1) = (det0/determinant)*xi(1,kint)*dxidx(1,2)
+          B(4,2*NNODE+2) = (det0/determinant)*xi(1,kint)*dxidx(1,1)
+          B(4,2*NNODE+3) = (det0/determinant)*xi(2,kint)*dxidx(2,2)
+          B(4,2*NNODE+4) = (det0/determinant)*xi(2,kint)*dxidx(2,1)
           
+          strain(1:4) = matmul(B(1:4,1:2*NNODE),U(1:2*NNODE)) +
+     1     matmul(B(1:4,2*NNODE+1:2*NNODE+4),alpha(1:4))
+          
+          stress(1:4) = matmul(D,strain)          
           rhs_temp(1:2*NNODE+4) = rhs_temp(1:2*NNODE+4) -
      1     matmul(transpose(B(1:4,1:2*NNODE+4)),stress)*w(kint)*
      2      determinant
-      
+          SVARS(4*kint-3: 4*kint) = stress(1:4)
+          Energy(2) = Energy(2) + 0.5*dot_product(stress,strain)*w(kint)
+     1       *determinant
       end do
       
-          AMATRX(1:2*NNODE,1:2*NNODE) = kuu-matmul(kua,
-     1     matmul(kaainv,kau))
+          AMATRX(1:2*NNODE,1:2*NNODE) = kuu(1:2*NNODE,1:2*NNODE)
+     1     -matmul(kua(1:2*NNODE,1:4),
+     2     matmul(kaainv(1:4,1:4),kau(1:4,1:2*NNODE)))
           RHS(1:2*NNODE,1) = rhs_temp(1:2*NNODE) -
-     1     matmul(kua,matmul(kaainv,rhs_temp(2*NNODE+1:2*NNODE+4)))
+     1     matmul(kua(1:2*NNODE,1:4),matmul(kaainv(1:4,1:4),rhs_temp
+     2     (2*NNODE+1:2*NNODE+4)))
           
+          
+
+          
+
+      
+      ELSE   
+      
+      call abq_UEL_2D_integrationpoints(n_points, NNODE, xi, w)
+      
+      RHS(1:MLVARX,1) = 0.d0
+      AMATRX(1:NDOFEL,1:NDOFEL) = 0.d0
+      
+      D = 0.d0
+      E = PROPS(1)
+      xnu = PROPS(2)
+      D12 = xnu*E/( (1+xnu)*(1-2.D0*xnu) )
+      D11 = (1-xnu)*E/( (1+xnu)*(1-2.D0*xnu) )
+      D44 = (1.D0-xnu)*E/( (1+xnu)*(1-2.D0*xnu) )
+      D(1:3,1:2) = D12
+      D(1,1) = D11
+      D(2,2) = D11
+      D(3,3) = D11
+      D(4,4) = D44
+      
+      Energy(1:8) = 0.d0
+      
+      do kint = 1, n_points
+          call abq_UEL_2D_shapefunctions(xi(1:2,kint),NNODE,N,dNdxi)
+          dxdxi = matmul(coords(1:2,1:NNODE),dNdxi(1:NNODE,1:2))
+          determinant = dxdxi(1,1)*dxdxi(2,2) - dxdxi(2,1)*dxdxi(1,2)
+          dxidx(1,1) = dxdxi(2,2)
+          dxidx(2,2) = dxdxi(1,1)
+          dxidx(1,2) = -dxdxi(1,2)
+          dxidx(2,1) = -dxdxi(2,1)
+          dxidx = dxidx/determinant
+
+          dNdx(1:NNODE,1:2) = matmul(dNdxi(1:NNODE,1:2),dxidx)
+          B = 0.d0
+          B(1,1:2*NNODE-1:2) = dNdx(1:NNODE,1)
+          B(2,2:2*NNODE:2) = dNdx(1:NNODE, 2)
+          B(4,1:2*NNODE-1:2) = dNdx(1:NNODE, 2)
+          B(4,2:2*NNODE:2) = dNdx(1:NNODE, 1)
+          
+          strain = matmul(B(1:4,1:2*NNODE), U(1:2*NNODE))
+          stress = matmul(D, strain)
+          RHS(1:2*NNODE, 1) = RHS(1:2*NNODE,1)
+     1       -matmul(transpose(B(1:4,1:2*NNODE)),stress(1:4))*w(kint)
+     2                      *determinant
+          
+          AMATRX(1:2*NNODE,1:2*NNODE) = AMATRX(1:2*NNODE,1:2*NNODE) +
+     1         matmul(transpose(B(1:4,1:2*NNODE)),matmul(D,B(1:4,1:2
+     2                  *NNODE)))*w(kint)*determinant
           
           Energy(2) = Energy(2) + 0.5*dot_product(stress,strain)*w(kint)
      1       *determinant
@@ -261,60 +322,8 @@
           SVARS(4*kint-3: 4*kint) = stress(1:4)
       
           
-!      end do
-!      call abq_UEL_2D_integrationpoints(n_points, n_nodes, xi, w)
-      
-!      RHS(1:MLVARX,1) = 0.d0
-!      AMATRX(1:NDOFEL,1:NDOFEL) = 0.d0
-      
-!      D = 0.d0
-!      E = PROPS(1)
-!      xnu = PROPS(2)
-!      D12 = xnu*E/( (1+xnu)*(1-2.D0*xnu) )
-!      D11 = (1-xnu)*E/( (1+xnu)*(1-2.D0*xnu) )
-!      D44 = (1.D0-xnu)*E/( (1+xnu)*(1-2.D0*xnu) )
-!      D(1:3,1:2) = D12
-!      D(1,1) = D11
-!      D(2,2) = D11
-!      D(3,3) = D11
-!      D(4,4) = D44
-      
-!      Energy(1:8) = 0.d0
-      
-!      do kint = 1, n_points
-!          call abq_UEL_2D_shapefunctions(xi(1:2,kint),NNODE,N,dNdxi)
-!          dxdxi = matmul(coords(1:2,1:NNODE),dNdxi(1:NNODE,1:2))
-!          determinant = dxdxi(1,1)*dxdxi(2,2) - dxdxi(2,1)*dxdxi(1,2)
-!          dxidx(1,1) = dxdxi(2,2)
-!          dxidx(2,2) = dxdxi(1,1)
-!          dxidx(1,2) = -dxdxi(1,2)
-!          dxidx(2,1) = -dxdxi(2,1)
-
-!          dNdx(1:NNODE,1:2) = matmul(dNdxi(1:NNODE,1:2),dxidx)
-!          B = 0.d0
-!          B(1,1:2*NNODE-1:2) = dNdx(1:NNODE,1)
-!          B(2,2:2*NNODE:2) = dNdx(1:NNODE, 2)
-!          B(4,1:2*NNODE-1:2) = dNdx(1:NNODE, 2)
-!          B(4,2:2*NNODE:2) = dNdx(1:NNODE, 1)
-          
-!          strain = matmul(B(1:4,1:2*NNODE), U(1:2*NNODE))
-!          stress = matmul(D, strain)
-!          RHS(1:2*NNODE, 1) = RHS(1:2*NNODE,1)
-!     1       -matmul(transpose(B(1:4,1:2*NNODE)),stress(1:4))*w(kint)
-!     2                      *determinant
-          
-!          AMATRX(1:2*NNODE,1:2*NNODE) = AMATRX(1:2*NNODE,1:2*NNODE) +
-!     1         matmul(transpose(B(1:4,1:2*NNODE)),matmul(D,B(1:4,1:2
-!     2                  *NNODE)))*w(kint)*determinant
-          
-!          Energy(2) = Energy(2) + 0.5*dot_product(stress,strain)*w(kint)
-!     1       *determinant
-          
-          SVARS(4*kint-3: 4*kint) = stress(1:4)
-      
-          
-!      end do
-      
+      end do
+      END IF
       PNEWT = 1.d0
       
       return
