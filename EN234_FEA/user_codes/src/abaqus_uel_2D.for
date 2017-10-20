@@ -152,6 +152,7 @@
       kau(1:4,1:2*NNODE) = 0.d0
       kaa(1:4,1:4) = 0.d0
       kaainv(1:4,1:4) = 0.d0
+      rhs_temp(1:2*NNODE+4) = 0.d0
       alpha(1:4) = 0.d0
       D = 0.d0
       E = PROPS(1)
@@ -214,16 +215,45 @@
      1     kaa(1,2)
           
           alpha(1:4) = -matmul(kaainv,matmul(kau,U(1:2*NNODE)))
+          strain(1:4) = matmul(B(1:4,1:2*NNODE),U(1:2*NNODE)) +
+     1     matmul(B(1:4,2*NNODE+1:2*NNODE+4),alpha(1:4))
+          stress(1:4) = matmul(D,strain)
+      
+      do kint = 1, n_points
+          call abq_UEL_2D_shapefunctions(xi(1:2,kint),NNODE,N,dNdxi)
+          dxdxi = matmul(coords(1:2,1:NNODE),dNdxi(1:NNODE,1:2))
+          determinant = dxdxi(1,1)*dxdxi(2,2) - dxdxi(2,1)*dxdxi(1,2)
+          dxidx(1,1) = dxdxi(2,2)
+          dxidx(2,2) = dxdxi(1,1)
+          dxidx(1,2) = -dxdxi(1,2)
+          dxidx(2,1) = -dxdxi(2,1)
+
+          dNdx(1:NNODE,1:2) = matmul(dNdxi(1:NNODE,1:2),dxidx)
+          B = 0.d0
+          B(1,1:2*NNODE-1:2) = dNdx(1:NNODE,1)
+          B(1,2*NNODE+1) = (det0/determinant)*xi(1,kint)*dxidx(1,1)
+          B(1,2*NNODE+3) = (det0/determinant)*xi(2,kint)*dxidx(2,1)
+          B(2,2:2*NNODE:2) = dNdx(1:NNODE, 2)
+          B(2,2*NNODE+2) = (det0/determinant)*xi(1,kint)*dxidx(1,2)
+          B(2,2*NNODE+4) = (det0/determinant)*xi(2,kint)*dxidx(2,2)
+          B(4,1:2*NNODE-1:2) = dNdx(1:NNODE, 2)
+          B(4,2:2*NNODE:2) = dNdx(1:NNODE, 1)
+          B(2,2*NNODE+1) = (det0/determinant)*xi(1,kint)*dxidx(1,2)
+          B(2,2*NNODE+2) = (det0/determinant)*xi(1,kint)*dxidx(1,1)
+          B(2,2*NNODE+3) = (det0/determinant)*xi(2,kint)*dxidx(2,2)
+          B(2,2*NNODE+4) = (det0/determinant)*xi(2,kint)*dxidx(2,2)
           
-          strain = matmul(B(1:4,1:2*NNODE), U(1:2*NNODE))
-          stress = matmul(D, strain)
-          RHS(1:2*NNODE, 1) = RHS(1:2*NNODE,1)
-     1       -matmul(transpose(B(1:4,1:2*NNODE)),stress(1:4))*w(kint)
-     2                      *determinant
+          rhs_temp(1:2*NNODE+4) = rhs_temp(1:2*NNODE+4) -
+     1     matmul(transpose(B(1:4,1:2*NNODE+4)),stress)*w(kint)*
+     2      determinant
+      
+      end do
+      
+          AMATRX(1:2*NNODE,1:2*NNODE) = kuu-matmul(kua,
+     1     matmul(kaainv,kau))
+          RHS(1:2*NNODE,1) = rhs_temp(1:2*NNODE) -
+     1     matmul(kua,matmul(kaainv,rhs_temp(2*NNODE+1:2*NNODE+4)))
           
-          AMATRX(1:2*NNODE,1:2*NNODE) = AMATRX(1:2*NNODE,1:2*NNODE) +
-     1         matmul(transpose(B(1:4,1:2*NNODE)),matmul(D,B(1:4,1:2
-     2                  *NNODE)))*w(kint)*determinant
           
           Energy(2) = Energy(2) + 0.5*dot_product(stress,strain)*w(kint)
      1       *determinant
