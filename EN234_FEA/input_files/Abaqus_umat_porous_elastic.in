@@ -74,7 +74,7 @@
         END HISTORY
 
         HISTORY, dload_history
-          0.d0, 20.d0
+          0.d0, 10.d0
          10.d0, 20.d0
         END HISTORY
 
@@ -157,7 +157,7 @@
 %                        UNSYMMETRIC  (optional - only for unsymmetric stiffness)
 %        It is silly to use the nonlinear option for linear elasticity, but is included here for demonstration purposes.
 
-         SOLVER, DIRECT, NONLINEAR, 1.d-09,15, UNSYMMETRIC
+         SOLVER, DIRECT, NONLINEAR, 1.d-08,15, UNSYMMETRIC
 %          SOLVER, DIRECT, LINEAR
 
 %      This prints the DOF values and projected nodal state for all solid elements to a tecplot readable file
@@ -185,6 +185,13 @@
 %             4
 %          END USER print PARAMETERS
 
+
+
+%        Uncomment the lines below to make the s-e plot
+          USER PRINT FILES
+%          List file names to contain the output. Fortran unit numbers are provided to each file in the user subroutine
+            Output_files\stressvstrain.dat
+          END USER PRINT FILES
         END STATIC STEP
          
 
