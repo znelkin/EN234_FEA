@@ -31,8 +31,8 @@ program en234fea
 !   Demo codes - these provide examples of coding and testing ABAQUS user elements in EN234FEA
 !
 !   Small strain linear elasticity - the UEL is in Abaqus_uel_3d.for
-   infil = 'input_files/Abaqus_uel_linear_elastic_3d.in'
-   outfil = 'Output_files/Abaqus_uel_linear_elastic_3d.out'
+!   infil = 'input_files/Abaqus_uel_linear_elastic_3d.in'
+!   outfil = 'Output_files/Abaqus_uel_linear_elastic_3d.out'
 
 
 !   Linear elastic plate with a central hole using an ABAQUS UEL
@@ -96,8 +96,8 @@ program en234fea
 !   outfil = 'Output_files/Abaqus_umat_porous_elastic.out'
 
 !  HW7 Hyperelastic user element
-!   infil = 'input_files/Abaqus_uel_hyperelastic.in'
-!   outfil = 'Output_files/Abaqus_uel_hyperelastic.out'
+   infil = 'input_files/Abaqus_uel_hyperelastic.in'
+   outfil = 'Output_files/Abaqus_uel_hyperelastic.out'
 
 !   Hyperelastic umat
 !  infil = 'input_files/Abaqus_umat_hyperelastic2.in'
