@@ -389,5 +389,24 @@
        Stress = Stress + K*JJ*(JJ-1.d0)*Cinv
        
        ! Define the D matrix
+       D = 0.d0
+       D = D + mu*exp(Q)*((1.d0/JJ**(4.d0/3.d0))*(G - 
+     1  ((1.d0/3.d0)*(spread(matmul(G,Cstar),dim=2,ncopies=6)
+     2   *spread(Cinv,dim=1,ncopies=6) 
+     3     + spread(Cinv,dim=2,ncopies=6)
+     4      *spread(matmul(G,Cstar),dim=1,ncopies=6)))
+     5       - ((JJ**(2.d0/3.d0))*(dot_product(Cstar,
+     5        matmul(G,(Cstarbar-Aye))))*(Omega))
+     6         +((1.d0/9.d0)*(dot_product(Cstar,
+     7          matmul(G,Cstar))*
+     8          (spread(Cinv,dim=2,ncopies=6)
+     9           *spread(Cinv,dim=1,ncopies=6))))))
+       D = D + mu*exp(Q)*((2.d0*spread(Pvec,dim=2,ncopies=6)
+     1  *spread((Pvec-(1.d0/3.d0)*Cinv),dim=1,ncopies=6)) 
+     2   - ((1.d0/(3.d0*JJ**(2.d0/3.d0)))
+     3    *spread(Cinv,dim=2,ncopies=6)
+     4     *spread(matmul(G,(Cstarbar-Aye))
+     5      ,dim=1,ncopies=6)))
+  
       end subroutine hyper
 
