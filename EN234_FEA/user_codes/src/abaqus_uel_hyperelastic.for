@@ -122,7 +122,21 @@
       double precision  ::  F(3,3)                            ! Deformation Gradient
       double precision  ::  Finv(3,3)                         ! Inverse of Deformation Gradient
       double precision  ::  JJ                                ! Determinant of F
-      double precision  ::  B(3,3)                            ! Cauchy-Green Deformation Tensor    
+      double precision  ::  B(3,3)                            ! Cauchy-Green Deformation Tensor
+      double precision  ::  H(6,9)
+      double precision  ::  Bstar(9,60)
+      double precision  ::  Sigma(3,3)                        ! The material Stress tensor
+      double precision  ::  qq(3,3)                           ! Dummy matrix to store Sigma* Ftranspose
+      double precision  ::  q(9)
+      double precision  ::  S(3,NNODE)
+      double precision  ::  Pv(3*NNODE)
+      double precision  ::  Svec(3*NNODE)
+      double precision  ::  Smat(3*NNODE,3*NNODE)
+!      double precision  ::  Y(60,60)
+      double precision  ::  Pmat(3*NNODE,3*NNODE)
+      double precision  :: kmat(60,60)
+      double precision  :: CauchyStressmat(3,3)
+      double precision  :: Cauchy(6)
     !
     !     Example ABAQUS UEL implementing 3D linear elastic elements
     !     El props are:
@@ -167,18 +181,130 @@
          B = matmul(F,transpose(F))
     !    Calculate Finv and the Jacobian
          call abq_UEL_invert3d(F,Finv,JJ)
+         call hyper(PROPS,NPROPS,F,JJ,B,Stress,D)
          
+         ! Define the H matrix
+         H = 0.d0
+         H(1,1) = F(1,1)
+         H(1,5) = F(2,1)
+         H(1,7) = F(3,1)
+         
+         H(2,2) = F(2,2)
+         H(2,4) = F(1,2)
+         H(2,9) = F(3,2)
+         
+         H(3,3) = F(3,3)
+         H(3,6) = F(1,3)
+         H(3,8) = F(2,3)
+         
+         H(4,1) = F(1,2)
+         H(4,2) = F(2,1)
+         H(4,4) = F(1,1)
+         H(4,5) = F(2,2)
+         H(4,7) = F(3,2)
+         H(4,9) = F(3,1)
+         
+         H(5,1) = F(1,3)
+         H(5,3) = F(3,1)
+         H(5,5) = F(2,3)
+         H(5,6) = F(1,1)
+         H(5,7) = F(3,3)
+         H(5,8) = F(2,1)
+         
+         H(6,2) = F(2,3)
+         H(6,3) = F(3,2)
+         H(6,4) = F(1,3)
+         H(6,6) = F(1,2)
+         H(6,8) = F(2,2)
+         H(6,9) = F(3,3)
+         
+         ! Define the Bstar matrix
+         Bstar = 0.d0
+         Bstar(1,1:3*NNODE-2:3) = dNdx(1:NNODE,1)
+         Bstar(2,2:3*NNODE-1:3) = dNdx(1:NNODE,2)
+         Bstar(3,3:3*NNODE:3)   = dNdx(1:NNODE,3)
+         Bstar(4,1:3*NNODE-2:3) = dNdx(1:NNODE,2)
+         Bstar(5,2:3*NNODE-1:3) = dNdx(1:NNODE,1)
+         Bstar(6,1:3*NNODE-2:3) = dNdx(1:NNODE,3)
+         Bstar(7,3:3*NNODE:3)   = dNdx(1:NNODE,1)
+         Bstar(8,2:3*NNODE-1:3) = dNdx(1:NNODE,3)
+         Bstar(9,3:3*NNODE:3)   = dNdx(1:NNODE,2)
+         
+         ! Define a 3 by 3 Sigma matrix from the Stress vector
+         Sigma = 0.d0
+         
+         Sigma(1,1) = Stress(1)
+         Sigma(1,2) = Stress(4)
+         Sigma(1,3) = Stress(5)
+         
+         Sigma(2,1) = Stress(4)
+         Sigma(2,2) = Stress(2)
+         Sigma(2,3) = Stress(6)
+         
+         Sigma(3,1) = Stress(5)
+         Sigma(3,2) = Stress(6)
+         Sigma(3,3) = Stress(3)
+         
+         ! Define q vector
+         qq = 0.d0
+         qq = matmul(Sigma,transpose(F))
+         
+         q = 0.d0
+         q(1) = qq(1,1)
+         q(2) = qq(2,2)
+         q(3) = qq(3,3)
+         q(4) = qq(2,1)
+         q(5) = qq(1,2)
+         q(6) = qq(3,1)
+         q(7) = qq(1,3)
+         q(8) = qq(3,2)
+         q(9) = qq(2,3)
+         
+         ! Set RHS Vector
+         RHS(1:3*NNODE,1) = RHS(1:3*NNODE,1)
+     1    -matmul(transpose(Bstar(1:9,1:3*NNODE)),q(1:9))
+     2     *w(kint)*determinant
+         
+         ! Set first term of K
+         AMATRX(1:3*NNODE,1:3*NNODE) = AMATRX(1:3*NNODE,1:3*NNODE) -
+     1    + matmul(transpose(Bstar(1:9,1:3*NNODE)),
+     2     matmul(transpose(H(1:6,1:9)),
+     3      matmul(D(1:6,1:6),
+     4       matmul(H(1:6,1:9),Bstar(1:9,1:3*NNODE)))))
+     5        *w(kint)*determinant
+         
+         ! Define Y matrix
+         S = reshape(matmul(transpose(dNdx(1:NNODE,1:3)),Sigma),
+     1    (/3,3*NNODE/3/))
+         do i = 1,NNODE
+          Pv(1:3*NNODE) = reshape(spread(transpose(dNdx(i:i,1:3)),
+     1                              dim=2,ncopies=NNODE),(/3*NNODE/))
+          Pmat(3*i-2:3*i,1:3*NNODE) = spread(Pv,dim=1,ncopies=3)
+          Svec(1:3*NNODE) = reshape(spread(S(1:3,i:i),
+     1                              dim=2,ncopies=NNODE),(/3*NNODE/))
+          Smat(3*i-2:3*i,1:3*NNODE) = spread(Svec,dim=1,ncopies=3)
+         end do
         
-!        B = 0.d0
-!        B(1,1:3*NNODE-2:3) = dNdx(1:NNODE,1)
-!        B(2,2:3*NNODE-1:3) = dNdx(1:NNODE,2)
-!        B(3,3:3*NNODE:3)   = dNdx(1:NNODE,3)
-!        B(4,1:3*NNODE-2:3) = dNdx(1:NNODE,2)
-!        B(4,2:3*NNODE-1:3) = dNdx(1:NNODE,1)
-!        B(5,1:3*NNODE-2:3) = dNdx(1:NNODE,3)
-!        B(5,3:3*NNODE:3)   = dNdx(1:NNODE,1)
-!        B(6,2:3*NNODE-1:3) = dNdx(1:NNODE,3)
-!        B(6,3:3*NNODE:3)   = dNdx(1:NNODE,2)
+         ! Calculate second term of AMATRX
+         AMATRX(1:3*NNODE,1:3*NNODE) = AMATRX(1:3*NNODE,1:3*NNODE) -
+     1    Pmat(1:3*NNODE,1:3*NNODE)*transpose(Smat(1:3*NNODE,1:3*NNODE))
+     2                          *w(kint)*determinant
+         
+         ! Calculate Cauchy stress
+         CauchyStressmat = 0.d0
+         CauchyStressmat = CauchyStressmat + 
+     1    (1.d0/JJ)*matmul(F,matmul(Sigma,
+     2     transpose(F)))
+         
+         cauchy = 0.d0
+         cauchy(1) = CauchyStressmat(1,1)
+         cauchy(2) = CauchyStressmat(2,2)
+         cauchy(3) = CauchyStressmat(3,3)
+         cauchy(4) = CauchyStressmat(1,2)
+         cauchy(5) = CauchyStressmat(1,3)
+         cauchy(6) = CauchyStressmat(2,3)
+
+         
 
 !        strain = matmul(B(1:6,1:3*NNODE),U(1:3*NNODE))
 
@@ -194,9 +320,9 @@
 !        ENERGY(2) = ENERGY(2)
 !     1   + 0.5D0*dot_product(stress,strain)*w(kint)*determinant           ! Store the elastic strain energy
 
-!        if (NSVARS>=n_points*6) then   ! Store stress at each integration point (if space was allocated to do so)
-!            SVARS(6*kint-5:6*kint) = stress(1:6)
-!        endif
+        if (NSVARS>=n_points*6) then   ! Store stress at each integration point (if space was allocated to do so)
+            SVARS(6*kint-5:6*kint) = cauchy(1:6)
+        endif
       end do
 
 
@@ -407,6 +533,10 @@
      3    *spread(Cinv,dim=2,ncopies=6)
      4     *spread(matmul(G,(Cstarbar-Aye))
      5      ,dim=1,ncopies=6)))
+       D = D + K*JJ*(((2.d0*JJ-1.d0)*
+     1  spread(Cinv,dim=2,ncopies=6)
+     2   *spread(Cinv,dim=1,ncopies=6))
+     3    + (2.d0*(JJ-1.d0)*Omega))
   
       end subroutine hyper
 
