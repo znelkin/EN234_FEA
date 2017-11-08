@@ -100,9 +100,13 @@
       double precision  ::  xi(2,9)                          ! Area integration points
       double precision  ::  w(9)                             ! Area integration weights
       double precision  ::  N(9)                             ! 2D shape functions
+      double precision  ::  Nbar(4)                          ! 2D shape functions for mu and c 
       double precision  ::  dNdxi(9,2)                       ! 2D shape function derivatives
+      double precision  ::  dNdxibar(4,2)                    ! 2D shape function derivatives for mu and c 
       double precision  ::  dNdx(9,2)                        ! Spatial derivatives
+      double precision  ::  dNdxbar(4,2)                     ! Spatial derivatives for mu and c
       double precision  ::  dxdxi(2,2)                       ! Derivative of spatial coords wrt normalized coords
+      double precision  ::  dxdxibar(2,2)                    ! Derivative of spatial coords wrt normalized coords
 
     !   Variables below are for computing integrals over element faces
       double precision  ::  face_coords(2,3)                  ! Coords of nodes on an element face
@@ -119,17 +123,14 @@
       double precision  ::  B(9,24)                           ! strain = B*(dof_total)
       double precision  ::  ktemp(22,22)                      ! Temporary stiffness (for incompatible mode elements)
       double precision  ::  rhs_temp(22)                      ! Temporary RHS vector (for incompatible mode elements)
-      double precision  ::  kuu(18,18)                        ! Upper diagonal stiffness
-      double precision  ::  kaa(4,4),kaainv(4,4)              ! Lower diagonal stiffness
-      double precision  ::  kau(4,18)                         ! Lower quadrant of stiffness
-      double precision  ::  kua(18,4)                         ! Upper quadrant of stiffness
-      double precision  ::  alpha(4)                          ! Internal DOF for incompatible mode element
-      double precision  ::  dxidx(2,2), determinant, det0     ! Jacobian inverse and determinant
+      double precision  ::  dxidx(2,2), dxidxbar(2,2)         ! Jacobian inverse
+      double precision  ::  determinant, determinantbar       ! determinant
       double precision  ::  E, xnu, D44, D11, D12             ! Material properties
       double precision  ::  Omega, WGibbs, Kappa, Diffc, Theta! Diffusion Properties
       double precision  ::  F, dFdc                           ! Gibbs Free Energy & its derivative
       double precision  ::  D(9,9)                            ! New D matrix
       double precision  ::  SumD
+      double precision  ::  qvec(9)                              ! qvec
 
     !
     !     Example ABAQUS UEL implementing 2D linear elastic elements
@@ -157,13 +158,7 @@
       
       
       ktemp(1:2*NNODE+4,1:2*NNODE+4) = 0.d0
-      kuu(1:2*NNODE,1:2*NNODE) = 0.d0
-      kua(1:2*NNODE,1:4) = 0.d0
-      kau(1:4,1:2*NNODE) = 0.d0
-      kaa(1:4,1:4) = 0.d0
-      kaainv(1:4,1:4) = 0.d0
       rhs_temp(1:2*NNODE+4) = 0.d0
-      alpha(1:4) = 0.d0
       Del = 0.d0
       E = PROPS(1)
       xnu = PROPS(2)
@@ -194,8 +189,8 @@
   
           
           
-      do kint = 1, n_points
-          call abq_UEL_2D_shapefunctions(xi(1:2,kint),NNODE,N,dNdxi)
+      do kint = 1, 4! n_points
+          call abq_UEL_2D_shapefunctions(xi(1:2,kint),8,N,dNdxi)
           dxdxi = matmul(coords(1:2,1:NNODE),dNdxi(1:NNODE,1:2))
           determinant = dxdxi(1,1)*dxdxi(2,2) - dxdxi(2,1)*dxdxi(1,2)
           dxidx(1,1) = dxdxi(2,2)
@@ -207,30 +202,249 @@
           dNdx(1:NNODE,1:2) = matmul(dNdxi(1:NNODE,1:2),dxidx)
           
           ! Get the Interpolation functions for the four noded element
-          call abq_UEL_2D_shapefunctions(xi(1:2,kint),NNODE,N,dNdxi)
-          dxdxi = matmul(coords(1:2,1:NNODE),dNdxi(1:NNODE,1:2))
-          determinant = dxdxi(1,1)*dxdxi(2,2) - dxdxi(2,1)*dxdxi(1,2)
-          dxidx(1,1) = dxdxi(2,2)
-          dxidx(2,2) = dxdxi(1,1)
-          dxidx(1,2) = -dxdxi(1,2)
-          dxidx(2,1) = -dxdxi(2,1)
-          dxidx = dxidx/determinant
+          call abq_UEL_2D_shapefunctions(xi(1:2,kint),4,Nbar,dNdxibar)
+          dxdxibar(1:2,1:2) = matmul(coords(1:2,1:4),dNdxibar(1:4,1:2))
+          determinantbar = dxdxibar(1,1)*dxdxibar(2,2) - 
+     1    dxdxibar(2,1)*dxdxibar(1,2)
+          dxidxbar(1,1) = dxdxibar(2,2)
+          dxidxbar(2,2) = dxdxibar(1,1)
+          dxidxbar(1,2) = -dxdxibar(1,2)
+          dxidxbar(2,1) = -dxdxibar(2,1)
+          dxidxbar = dxidxbar/determinantbar
 
           dNdx(1:NNODE,1:2) = matmul(dNdxi(1:NNODE,1:2),dxidx)
           
+          ! Get dNdxbar
+          
+          ! Define the modified B matrix
           B = 0.d0
-          B(1,1:2*NNODE-1:2) = dNdx(1:NNODE,1)
-          B(1,2*NNODE+1) = (det0/determinant)*xi(1,kint)*dxidx(1,1)
-          B(1,2*NNODE+3) = (det0/determinant)*xi(2,kint)*dxidx(2,1)
-          B(2,2:2*NNODE:2) = dNdx(1:NNODE, 2)
-          B(2,2*NNODE+2) = (det0/determinant)*xi(1,kint)*dxidx(1,2)
-          B(2,2*NNODE+4) = (det0/determinant)*xi(2,kint)*dxidx(2,2)
-          B(4,1:2*NNODE-1:2) = dNdx(1:NNODE, 2)
-          B(4,2:2*NNODE:2) = dNdx(1:NNODE, 1)
-          B(4,2*NNODE+1) = (det0/determinant)*xi(1,kint)*dxidx(1,2)
-          B(4,2*NNODE+2) = (det0/determinant)*xi(1,kint)*dxidx(1,1)
-          B(4,2*NNODE+3) = (det0/determinant)*xi(2,kint)*dxidx(2,2)
-          B(4,2*NNODE+4) = (det0/determinant)*xi(2,kint)*dxidx(2,1)
+          ! Elasticity related parts of the B Matrix
+          B(1,1)  = dNdx(1,1)
+!          B(1,2)  =
+!          B(1,3)  =
+!          B(1,4)  =
+          B(1,5)  = dNdx(2,1)
+!          B(1,6)  =
+!          B(1,7)  =
+!          B(1,8)  =
+          B(1,9)  = dNdx(3,1)
+!          B(1,10) = 
+!          B(1,11) =
+!          B(1,12) =
+          B(1,13) = dNdx(4,1)
+!          B(1,14) =
+!          B(1,15) =
+!          B(1,16) =
+          B(1,17) = dNdx(5,1)
+!          B(1,18) =
+          B(1,19) = dNdx(6,1)
+!          B(1,20) =
+          B(1,21) = dNdx(7,1)
+!          B(1,22) =
+          B(1,23) = dNdx(8,1)
+!          B(1,24) =
+          
+!          B(2,1)  =
+          B(2,2)  = dNdx(1,2)
+!          B(2,3)  =
+!          B(2,4)  =
+!          B(2,5)  =
+          B(2,6)  = dNdx(2,2)
+!          B(2,7)  =
+!          B(2,8)  =
+!          B(2,9)  =
+          B(2,10) = dNdx(3,2) 
+!          B(2,11) =
+!          B(2,12) =
+!          B(2,13) =
+          B(2,14) = dNdx(4,2)
+!          B(2,15) =
+!          B(2,16) =
+!          B(2,17) =
+          B(2,18) = dNdx(5,2)
+!          B(2,19) =
+          B(2,20) = dNdx(6,2)
+!          B(2,21) =
+          B(2,22) = dNdx(7,2)
+!          B(2,23) =
+          B(2,24) = dNdx(8,2)
+          
+          B(3,1)  = dNdx(1,2)
+          B(3,2)  = dNdx(1,1)
+!          B(3,3)  =
+!          B(3,4)  =
+          B(3,5)  = dNdx(2,2)
+          B(3,6)  = dNdx(2,1)
+!          B(3,7)  =
+!          B(3,8)  =
+          B(3,9)  = dNdx(3,2)
+          B(3,10) = dNdx(3,1)
+!          B(3,11) =
+!          B(3,12) =
+          B(3,13) = dNdx(4,2)
+          B(3,14) = dNdx(4,1)
+!          B(3,15) =
+!          B(3,16) =
+          B(3,17) = dNdx(5,2)
+          B(3,18) = dNdx(5,1)
+          B(3,19) = dNdx(6,2)
+          B(3,20) = dNdx(6,1)
+          B(3,21) = dNdx(7,2)
+          B(3,22) = dNdx(7,1)
+          B(3,23) = dNdx(8,2)
+          B(3,24) = dNdx(8,1)
+          ! Mu and C related parts of the B Matrix
+!          B(4,1)  = 
+!          B(4,2)  =
+          B(4,3)  = Nbar(1)
+!          B(4,4)  =
+!          B(4,5)  = 
+!          B(4,6)  =
+          B(4,7)  = Nbar(2)
+!          B(4,8)  =
+!          B(4,9)  = 
+!          B(4,10) = 
+          B(4,11) = Nbar(3)
+!          B(4,12) =
+!          B(4,13) = 
+!          B(4,14) =
+          B(4,15) = Nbar(4)
+!          B(4,16) =
+!          B(4,17) = 
+!          B(4,18) =
+!          B(4,19) = 
+!          B(4,20) =
+!          B(4,21) = 
+!          B(4,22) =
+!          B(4,23) = 
+!          B(4,24) =
+          
+!          B(5,1)  = 
+!          B(5,2)  =
+!          B(5,3)  =
+          B(5,4)  = Nbar(1)
+!          B(5,5)  = 
+!          B(5,6)  =
+!          B(5,7)  =
+          B(5,8)  = Nbar(2)
+!          B(5,9)  = 
+!          B(5,10) = 
+!          B(5,11) =
+          B(5,12) = Nbar(3)
+!          B(5,13) = 
+!          B(5,14) =
+!          B(5,15) =
+          B(5,16) = Nbar(4)
+!          B(5,17) = 
+!          B(5,18) =
+!          B(5,19) = 
+!          B(5,20) =
+!          B(5,21) = 
+!          B(5,22) =
+!          B(5,23) = 
+!          B(5,24) =
+
+          
+          ! Parts of the B Matrix related to the Derivatives of Mu and C
+!          B(6,1)  = 
+!          B(6,2)  =
+          B(6,3)  = dNdxbar(1,1)
+!          B(6,4)  =
+!          B(6,5)  = 
+!          B(6,6)  =
+          B(6,7)  = dNdxbar(2,1)
+!          B(6,8)  =
+!          B(6,9)  = 
+!          B(6,10) = 
+          B(6,11) = dNdxbar(3,1)
+!          B(6,12) =
+!          B(6,13) = 
+!          B(6,14) =
+          B(6,15) = dNdxbar(4,1)
+!          B(6,16) =
+!          B(6,17) = 
+!          B(6,18) =
+!          B(6,19) = 
+!          B(6,20) =
+!          B(6,21) = 
+!          B(6,22) =
+!          B(6,23) = 
+!          B(6,24) =
+          
+!          B(7,1)  = 
+!          B(7,2)  =
+          B(7,3)  = dNdxbar(1,2)
+!          B(7,4)  =
+!          B(7,5)  = 
+!          B(7,6)  =
+          B(7,7)  = dNdxbar(2,2)
+!          B(7,8)  =
+!          B(7,9)  = 
+!          B(7,10) = 
+          B(7,11) = dNdxbar(3,2)
+!          B(7,12) =
+!          B(7,13) = 
+!          B(7,14) =
+          B(7,15) = dNdxbar(4,2)
+!          B(7,16) =
+!          B(7,17) = 
+!          B(7,18) =
+!          B(7,19) = 
+!          B(7,20) =
+!          B(7,21) = 
+!          B(7,22) =
+!          B(7,23) = 
+!          B(7,24) =
+          
+!          B(8,1)  = 
+!          B(8,2)  =
+!          B(8,3)  =
+          B(8,4)  = dNdxbar(1,1)
+!          B(8,5)  = 
+!          B(8,6)  =
+!          B(8,7)  =
+          B(8,8)  = dNdxbar(2,1)
+!          B(8,9)  = 
+!          B(8,10) = 
+!          B(8,11) =
+          B(8,12) = dNdxbar(3,1)
+!          B(8,13) = 
+!          B(8,14) =
+!          B(8,15) =
+          B(8,16) = dNdxbar(4,1)
+!          B(8,17) = 
+!          B(8,18) =
+!          B(8,19) = 
+!          B(8,20) =
+!          B(8,21) = 
+!          B(8,22) =
+!          B(8,23) = 
+!          B(8,24) =
+          
+!          B(9,1)  = 
+!          B(9,2)  =
+!          B(9,3)  =
+          B(9,4)  = dNdxbar(1,2)
+!          B(9,5)  = 
+!          B(9,6)  =
+!          B(9,7)  =
+          B(9,8)  = dNdxbar(2,2)
+!          B(9,9)  = 
+!          B(9,10) = 
+!          B(9,11) =
+          B(9,12) = dNdxbar(3,2)
+!          B(9,13) = 
+!          B(9,14) =
+!          B(9,15) =
+          B(9,16) = dNdxbar(4,2)
+!          B(9,17) = 
+!          B(9,18) =
+!          B(9,19) = 
+!          B(9,20) =
+!          B(9,21) = 
+!          B(9,22) =
+!          B(9,23) = 
+!          B(9,24) =
           
           ! Define the Gibbs Free energy as a function of concentration
           F = 2.d0*WGibbs*U(5)
@@ -255,20 +469,7 @@
           D(7,9) = -Kappa
           D(8,6) = Theta*Diffc
           D(8,7) = Theta*Diffc
-          
-          ktemp(1:2*NNODE+4,1:2*NNODE+4) = ktemp(1:2*NNODE+4,
-     1     1:2*NNODE+4) + matmul(transpose(B(1:4,1:2*NNODE+4)),
-     2      matmul(Del,B(1:4,1:2*NNODE+4)))*w(kint)*determinant 
-      
       end do
-          kuu(1:2*NNODE,1:2*NNODE) = ktemp(1:2*NNODE,1:2*NNODE)
-          kua(1:2*NNODE,1:4) = ktemp(1:2*NNODE,2*NNODE+1:2*NNODE+4)
-          kau(1:4,1:2*NNODE) = ktemp(2*NNODE+1:2*NNODE+4,1:2*NNODE)
-          kaa(1:4,1:4) = ktemp(2*NNODE+1:2*NNODE+4,2*NNODE+1:2*NNODE+4)
-          call abq_inverse_LU(kaa,kaainv,4)
-          alpha(1:4) = -matmul(kaainv(1:4,1:4),
-     1                          matmul(kau(1:4,1:2*NNODE),U(1:2*NNODE)))
-
         
       do kint = 1, n_points
           call abq_UEL_2D_shapefunctions(xi(1:2,kint),NNODE,N,dNdxi)
@@ -295,24 +496,41 @@
           B(4,2*NNODE+3) = (det0/determinant)*xi(2,kint)*dxidx(2,2)
           B(4,2*NNODE+4) = (det0/determinant)*xi(2,kint)*dxidx(2,1)
           
-          strain(1:4) = matmul(B(1:4,1:2*NNODE),U(1:2*NNODE)) +
-     1     matmul(B(1:4,2*NNODE+1:2*NNODE+4),alpha(1:4))
+          ! Calculate the stress and strain 
+          strain(1:3) = matmul(B(1:3,1:24),U(1:24))
+          stress(1:3) = matmul(Del(1:3,1:3),strain(1,3)
           
-          stress(1:4) = matmul(Del,strain)          
-          rhs_temp(1:2*NNODE+4) = rhs_temp(1:2*NNODE+4) -
-     1     matmul(transpose(B(1:4,1:2*NNODE+4)),stress)*w(kint)*
-     2      determinant
-          SVARS(4*kint-3: 4*kint) = stress(1:4)
-          Energy(2) = Energy(2) + 0.5*dot_product(stress,strain)*w(kint)
-     1       *determinant
+          ! Calculae vector q
+          qvec = 0.d0
+          qvec(1) = stress(1)
+          qvec(2) = stress(2)
+          qvec(3) = stress(3)
+          
+          qvec(4) = U(4) + DU(4,1)
+     1     -(2.d0*WGibbs*(U(5) + DU(5,1))
+     2      *(U(5,1) + DU(5,1) -1.d0)*(2.d0*(U(5,1) + DU(5,1))-1.d0))
+     3       -Omega*(stress(1)+stress(2))
+          qvec(5) = DU(5,1)/DTIME
+          
+          qvec(6) = -Kappa*(U(8) + DU(8,1))
+          qvec(7) = -Kappa*(U(9) + DU(9,1))
+          
+          qvec(8) = Diffc*(U(6) + Theta*DU(6,1))
+          qvec(9) = Diffc*(U(7) + Theta*DU(7,1))
+!          rhs_temp(1:2*NNODE+4) = rhs_temp(1:2*NNODE+4) -
+!     1     matmul(transpose(B(1:4,1:2*NNODE+4)),stress)*w(kint)*
+!     2      determinant
+!          SVARS(4*kint-3: 4*kint) = stress(1:4)
+!          Energy(2) = Energy(2) + 0.5*dot_product(stress,strain)*w(kint)
+!     1       *determinant
       end do
       
-          AMATRX(1:2*NNODE,1:2*NNODE) = kuu(1:2*NNODE,1:2*NNODE)
-     1     -matmul(kua(1:2*NNODE,1:4),
-     2     matmul(kaainv(1:4,1:4),kau(1:4,1:2*NNODE)))
-          RHS(1:2*NNODE,1) = rhs_temp(1:2*NNODE) -
-     1     matmul(kua(1:2*NNODE,1:4),matmul(kaainv(1:4,1:4),rhs_temp
-     2     (2*NNODE+1:2*NNODE+4)))
+!          AMATRX(1:2*NNODE,1:2*NNODE) = kuu(1:2*NNODE,1:2*NNODE)
+!     1     -matmul(kua(1:2*NNODE,1:4),
+!     2     matmul(kaainv(1:4,1:4),kau(1:4,1:2*NNODE)))
+!          RHS(1:2*NNODE,1) = rhs_temp(1:2*NNODE) -
+!     1     matmul(kua(1:2*NNODE,1:4),matmul(kaainv(1:4,1:4),rhs_temp
+!     2     (2*NNODE+1:2*NNODE+4)))
           
           
       PNEWT = 1.d0
