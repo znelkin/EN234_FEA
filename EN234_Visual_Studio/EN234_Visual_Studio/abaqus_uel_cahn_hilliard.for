@@ -188,10 +188,12 @@
           dNdx(1:NNODE,1:2) = matmul(dNdxi(1:NNODE,1:2),dxidx)
           
           ! Get the Interpolation functions for the four noded element
+          determinantbar = 0.d0
           call abq_UEL_2D_shapefunctions(xi(1:2,kint),4,Nbar,dNdxibar)
           dxdxibar(1:2,1:2) = matmul(coords(1:2,1:4),dNdxibar(1:4,1:2))
-          determinantbar = dxdxibar(1,1)*dxdxibar(2,2) - 
-     1    dxdxibar(2,1)*dxdxibar(1,2)
+          determinantbar = determinantbar + 
+     1     dxdxibar(1,1)*dxdxibar(2,2) - 
+     2      dxdxibar(2,1)*dxdxibar(1,2)
           dxidxbar(1,1) = dxdxibar(2,2)
           dxidxbar(2,2) = dxdxibar(1,1)
           dxidxbar(1,2) = -dxdxibar(1,2)
