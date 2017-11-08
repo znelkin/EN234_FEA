@@ -178,7 +178,7 @@
             F(i,i) = F(i,i) + 1.d0
          end do
     !    Calculate Cauchy-Green Tensor
-         B = matmul(F,transpose(F))
+         B = matmul(transpose(F),F)
     !    Calculate Finv and the Jacobian
          call abq_UEL_invert3d(F,Finv,JJ)
          call hyper(PROPS,NPROPS,F,JJ,B,Stress,D)
@@ -266,29 +266,26 @@
      2     *w(kint)*determinant
          
          ! Set first term of K
-         AMATRX(1:3*NNODE,1:3*NNODE) = AMATRX(1:3*NNODE,1:3*NNODE) -
+         AMATRX(1:3*NNODE,1:3*NNODE) = AMATRX(1:3*NNODE,1:3*NNODE) +
      1    + matmul(transpose(Bstar(1:9,1:3*NNODE)),
      2     matmul(transpose(H(1:6,1:9)),
      3      matmul(D(1:6,1:6),
      4       matmul(H(1:6,1:9),Bstar(1:9,1:3*NNODE)))))
      5        *w(kint)*determinant
          
-         ! Define Y matrix
-         S = reshape(matmul(transpose(dNdx(1:NNODE,1:3)),Sigma),
-     1    (/3,3*NNODE/3/))
+         kmat(1:NNODE,1:NNODE) = matmul(dNdx(1:NNODE,1:3),
+     1    matmul(Sigma(1:3,1:3),transpose(dNdx(1:NNODE,1:3))))
+         
          do i = 1,NNODE
-          Pv(1:3*NNODE) = reshape(spread(transpose(dNdx(i:i,1:3)),
-     1                              dim=2,ncopies=NNODE),(/3*NNODE/))
-          Pmat(3*i-2:3*i,1:3*NNODE) = spread(Pv,dim=1,ncopies=3)
-          Svec(1:3*NNODE) = reshape(spread(S(1:3,i:i),
-     1                              dim=2,ncopies=NNODE),(/3*NNODE/))
-          Smat(3*i-2:3*i,1:3*NNODE) = spread(Svec,dim=1,ncopies=3)
+          do j=1,NNODE
+            AMATRX(3*(i-1)+1,3*(j-1)+1) = AMATRX(3*(i-1)+1,3*(j-1)+1) +
+     2                          kmat(i,j)*w(kint)*determinant
+            AMATRX(3*(i-1)+2,3*(j-1)+2) = AMATRX(3*(i-1)+2,3*(j-1)+2) +
+     2                          kmat(i,j)*w(kint)*determinant
+            AMATRX(3*(i-1)+3,3*(j-1)+3) = AMATRX(3*(i-1)+3,3*(j-1)+3) +
+     2                          kmat(i,j)*w(kint)*determinant
+          end do
          end do
-        
-         ! Calculate second term of AMATRX
-         AMATRX(1:3*NNODE,1:3*NNODE) = AMATRX(1:3*NNODE,1:3*NNODE) -
-     1    Pmat(1:3*NNODE,1:3*NNODE)*transpose(Smat(1:3*NNODE,1:3*NNODE))
-     2                          *w(kint)*determinant
          
          ! Calculate Cauchy stress
          CauchyStressmat = 0.d0
@@ -459,10 +456,12 @@
        Aye(6) = 0.d0
        
        Pvec = (1.d0/(2.d0*JJ**(2.d0/3.d0)))*(matmul(G,(Cstarbar-Aye))
-     1  -(1.d0/3.d0)*(dot_product(Cstar,matmul(G,(Cstarbar-Aye))))*Cinv)
+     1  -(1.d0/3.d0)*(dot_product(Cstar,
+     2  matmul(G,(Cstarbar-Aye))))*Cinv)
        
        ! Define Q
-       Q = (1.d0/4.d0)*dot_product((Cbar-Aye),matmul(G,(Cbar-Aye)))
+       Q = (1.d0/4.d0)*dot_product((Cstarbar-Aye),
+     3  matmul(G,(Cstarbar-Aye)))
        
        ! Define Omega
        Omega = 0.d0
@@ -521,7 +520,7 @@
      2   *spread(Cinv,dim=1,ncopies=6) 
      3     + spread(Cinv,dim=2,ncopies=6)
      4      *spread(matmul(G,Cstar),dim=1,ncopies=6)))
-     5       - ((JJ**(2.d0/3.d0))*(dot_product(Cstar,
+     5       - ((JJ**(2.d0/3.d0)/3.d0)*(dot_product(Cstar,
      5        matmul(G,(Cstarbar-Aye))))*(Omega))
      6         +((1.d0/9.d0)*(dot_product(Cstar,
      7          matmul(G,Cstar))*

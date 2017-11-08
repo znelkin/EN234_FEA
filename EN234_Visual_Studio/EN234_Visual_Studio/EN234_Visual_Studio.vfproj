@@ -118,6 +118,7 @@
 		<File RelativePath="..\..\EN234_FEA\user_codes\src\convergencecheck.f90"/>
 		<File RelativePath="..\..\EN234_FEA\user_codes\src\el_linelast_3Dbasic.f90"/>
 		<File RelativePath="..\..\EN234_FEA\user_codes\src\new_user_element_stub.f90"/>
+		<File RelativePath="..\..\EN234_FEA\user_codes\src\abaqus_uel_hyperelastic.for"/>
 		<File RelativePath="..\..\EN234_FEA\user_codes\src\user_constraint.f90"/>
 		<File RelativePath="..\..\EN234_FEA\user_codes\src\user_distributedload.f90"/>
 		<File RelativePath="..\..\EN234_FEA\user_codes\src\user_element.f90"/>
