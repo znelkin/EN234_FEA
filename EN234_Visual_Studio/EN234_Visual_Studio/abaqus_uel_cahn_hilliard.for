@@ -100,11 +100,11 @@
       double precision  ::  xi(2,9)                          ! Area integration points
       double precision  ::  w(9)                             ! Area integration weights
       double precision  ::  N(9)                             ! 2D shape functions
-      double precision  ::  Nbar(4)                          ! 2D shape functions for mu and c 
+      double precision  ::  Nbar(9)                          ! 2D shape functions for mu and c 
       double precision  ::  dNdxi(9,2)                       ! 2D shape function derivatives
-      double precision  ::  dNdxibar(4,2)                    ! 2D shape function derivatives for mu and c 
+      double precision  ::  dNdxibar(9,2)                    ! 2D shape function derivatives for mu and c 
       double precision  ::  dNdx(9,2)                        ! Spatial derivatives
-      double precision  ::  dNdxbar(4,2)                     ! Spatial derivatives for mu and c
+      double precision  ::  dNdxbar(9,2)                     ! Spatial derivatives for mu and c
       double precision  ::  dxdxi(2,2)                       ! Derivative of spatial coords wrt normalized coords
       double precision  ::  dxdxibar(2,2)                    ! Derivative of spatial coords wrt normalized coords
 
@@ -144,7 +144,7 @@
       if (NNODE == 3) n_points = 1              ! Linear triangle
       if (NNODE == 4) n_points = 4               ! Linear rectangle
       if (NNODE == 6) n_points = 4              ! Quadratic triangle
-      if (NNODE == 8) n_points = 9               ! Serendipity rectangle
+      if (NNODE == 8) n_points = 4               ! Serendipity rectangle
       if (NNODE == 9) n_points = 9             ! Quadratic rect
 
     ! Write your code for a 2D element below
@@ -498,7 +498,7 @@
           
           ! Calculate the stress and strain 
           strain(1:3) = matmul(B(1:3,1:24),U(1:24))
-          stress(1:3) = matmul(Del(1:3,1:3),strain(1,3)
+          stress(1:3) = matmul(Del(1:3,1:3),strain(1:3))
           
           ! Calculae vector q
           qvec = 0.d0
@@ -508,15 +508,15 @@
           
           qvec(4) = U(4) + DU(4,1)
      1     -(2.d0*WGibbs*(U(5) + DU(5,1))
-     2      *(U(5,1) + DU(5,1) -1.d0)*(2.d0*(U(5,1) + DU(5,1))-1.d0))
+     2      *(U(5) + DU(5,1) -1.d0)*(2.d0*(U(5) + DU(5,1))-1.d0))
      3       -Omega*(stress(1)+stress(2))
           qvec(5) = DU(5,1)/DTIME
           
-          qvec(6) = -Kappa*(U(8) + DU(8,1))
-          qvec(7) = -Kappa*(U(9) + DU(9,1))
+          qvec(6) = -Kappa*(U(8))
+          qvec(7) = -Kappa*(U(9))
           
-          qvec(8) = Diffc*(U(6) + Theta*DU(6,1))
-          qvec(9) = Diffc*(U(7) + Theta*DU(7,1))
+          qvec(8) = Diffc*(U(6) + (Theta-1.d0)*DU(6,1))
+          qvec(9) = Diffc*(U(7) + (Theta-1.d0)*DU(7,1))
 !          rhs_temp(1:2*NNODE+4) = rhs_temp(1:2*NNODE+4) -
 !     1     matmul(transpose(B(1:4,1:2*NNODE+4)),stress)*w(kint)*
 !     2      determinant
