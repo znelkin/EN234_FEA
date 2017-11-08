@@ -11,7 +11,7 @@
 !          abq_UEL_1D_integrationpoints(n_points, n_nodes, xi, w)  = defines integration points for 1D line integral
 !=========================== ABAQUS format user element subroutine ===================
 
-      SUBROUTINE UELch(RHS,AMATRX,SVARS,ENERGY,NDOFEL,NRHS,NSVARS,
+      SUBROUTINE UEL(RHS,AMATRX,SVARS,ENERGY,NDOFEL,NRHS,NSVARS,
      1     PROPS,NPROPS,COORDS,MCRD,NNODE,U,DU,V,A,JTYPE,TIME,DTIME,
      2     KSTEP,KINC,JELEM,PARAMS,NDLOAD,JDLTYP,ADLMAG,PREDEF,NPREDF,
      3     LFLAGS,MLVARX,DDLMAG,MDLOAD,PNEWDT,JPROPS,NJPROP,PERIOD)
@@ -121,8 +121,6 @@
       double precision  ::  stress(4)                         ! Stress vector contains [s11, s22, s33, s12, s13, s23]
       double precision  ::  Del(4,4)                          ! stress = D*(strain)  (NOTE FACTOR OF 2 in shear strain)
       double precision  ::  B(9,24)                           ! strain = B*(dof_total)
-      double precision  ::  ktemp(22,22)                      ! Temporary stiffness (for incompatible mode elements)
-      double precision  ::  rhs_temp(22)                      ! Temporary RHS vector (for incompatible mode elements)
       double precision  ::  dxidx(2,2), dxidxbar(2,2)         ! Jacobian inverse
       double precision  ::  determinant, determinantbar       ! determinant
       double precision  ::  E, xnu, D44, D11, D12             ! Material properties
@@ -153,12 +151,6 @@
       
       RHS(1:MLVARX,1) = 0.d0
       AMATRX(1:NDOFEL,1:NDOFEL) = 0.d0
-      
-
-      
-      
-      ktemp(1:2*NNODE+4,1:2*NNODE+4) = 0.d0
-      rhs_temp(1:2*NNODE+4) = 0.d0
       Del = 0.d0
       E = PROPS(1)
       xnu = PROPS(2)
@@ -181,17 +173,11 @@
       D = 0.d0
       
       Energy(1:8) = 0.d0
-      
-      call abq_UEL_2D_shapefunctions([0.d0,0.d0],NNODE,N,dNdxi)
-          dxdxi = matmul(coords(1:2,1:NNODE),dNdxi(1:NNODE,1:2))
-          det0 = dxdxi(1,1)*dxdxi(2,2) - dxdxi(2,1)*dxdxi(1,2)
-
-  
           
           
       do kint = 1, 4! n_points
           call abq_UEL_2D_shapefunctions(xi(1:2,kint),8,N,dNdxi)
-          dxdxi = matmul(coords(1:2,1:NNODE),dNdxi(1:NNODE,1:2))
+          dxdxi = matmul(coords(1:2,1:8),dNdxi(1:8,1:2))
           determinant = dxdxi(1,1)*dxdxi(2,2) - dxdxi(2,1)*dxdxi(1,2)
           dxidx(1,1) = dxdxi(2,2)
           dxidx(2,2) = dxdxi(1,1)
@@ -447,13 +433,13 @@
 !          B(9,24) =
           
           ! Define the Gibbs Free energy as a function of concentration
-          F = 2.d0*WGibbs*U(5)
-     1     *(U(5) - 1.d0)
-     2      *(2.d0*U(5) - 1.d0)
+          F = 2.d0*WGibbs*(U(5) - DU(5,1))
+     1     *((U(5) - DU(5,1)) - 1.d0)
+     2      *(2.d0*(U(5) - DU(5,1)) - 1.d0)
           
           ! Define the derivative of the Gibbs Free Energy
-          dFdc = WGibbs*(12.d0*(U(5) + DU(5,1))**2.d0
-     1     - 12.d0*(U(5) + DU(5,1)) + 2.d0)
+          dFdc = WGibbs*(12.d0*U(5)**2.d0
+     1     - 12.d0*U(5) + 2.d0)
           
           ! Define the summation for D(4,5)
           SumD = (1.d0/3.d0)*(D11 + D22 + D33 + 6.d0*D12)
@@ -469,33 +455,8 @@
           D(7,9) = -Kappa
           D(8,6) = Theta*Diffc
           D(8,7) = Theta*Diffc
-      end do
-        
-      do kint = 1, n_points
-          call abq_UEL_2D_shapefunctions(xi(1:2,kint),NNODE,N,dNdxi)
-          dxdxi = matmul(coords(1:2,1:NNODE),dNdxi(1:NNODE,1:2))
-          determinant = dxdxi(1,1)*dxdxi(2,2) - dxdxi(2,1)*dxdxi(1,2)
-          dxidx(1,1) = dxdxi(2,2)
-          dxidx(2,2) = dxdxi(1,1)
-          dxidx(1,2) = -dxdxi(1,2)
-          dxidx(2,1) = -dxdxi(2,1)
-          dxidx = dxidx/determinant
 
-          dNdx(1:NNODE,1:2) = matmul(dNdxi(1:NNODE,1:2),dxidx)
-          B = 0.d0
-          B(1,1:2*NNODE-1:2) = dNdx(1:NNODE,1)
-          B(1,2*NNODE+1) = (det0/determinant)*xi(1,kint)*dxidx(1,1)
-          B(1,2*NNODE+3) = (det0/determinant)*xi(2,kint)*dxidx(2,1)
-          B(2,2:2*NNODE:2) = dNdx(1:NNODE, 2)
-          B(2,2*NNODE+2) = (det0/determinant)*xi(1,kint)*dxidx(1,2)
-          B(2,2*NNODE+4) = (det0/determinant)*xi(2,kint)*dxidx(2,2)
-          B(4,1:2*NNODE-1:2) = dNdx(1:NNODE, 2)
-          B(4,2:2*NNODE:2) = dNdx(1:NNODE, 1)
-          B(4,2*NNODE+1) = (det0/determinant)*xi(1,kint)*dxidx(1,2)
-          B(4,2*NNODE+2) = (det0/determinant)*xi(1,kint)*dxidx(1,1)
-          B(4,2*NNODE+3) = (det0/determinant)*xi(2,kint)*dxidx(2,2)
-          B(4,2*NNODE+4) = (det0/determinant)*xi(2,kint)*dxidx(2,1)
-          
+
           ! Calculate the stress and strain 
           strain(1:3) = matmul(B(1:3,1:24),U(1:24))
           stress(1:3) = matmul(Del(1:3,1:3),strain(1:3))
@@ -506,9 +467,9 @@
           qvec(2) = stress(2)
           qvec(3) = stress(3)
           
-          qvec(4) = U(4) + DU(4,1)
-     1     -(2.d0*WGibbs*(U(5) + DU(5,1))
-     2      *(U(5) + DU(5,1) -1.d0)*(2.d0*(U(5) + DU(5,1))-1.d0))
+          qvec(4) = U(4)
+     1     -(2.d0*WGibbs*U(5)
+     2      *(U(5) -1.d0)*(2.d0*U(5) -1.d0))
      3       -Omega*(stress(1)+stress(2))
           qvec(5) = DU(5,1)/DTIME
           
@@ -517,25 +478,23 @@
           
           qvec(8) = Diffc*(U(6) + (Theta-1.d0)*DU(6,1))
           qvec(9) = Diffc*(U(7) + (Theta-1.d0)*DU(7,1))
-!          rhs_temp(1:2*NNODE+4) = rhs_temp(1:2*NNODE+4) -
-!     1     matmul(transpose(B(1:4,1:2*NNODE+4)),stress)*w(kint)*
-!     2      determinant
-!          SVARS(4*kint-3: 4*kint) = stress(1:4)
-!          Energy(2) = Energy(2) + 0.5*dot_product(stress,strain)*w(kint)
-!     1       *determinant
-      end do
-      
-!          AMATRX(1:2*NNODE,1:2*NNODE) = kuu(1:2*NNODE,1:2*NNODE)
-!     1     -matmul(kua(1:2*NNODE,1:4),
-!     2     matmul(kaainv(1:4,1:4),kau(1:4,1:2*NNODE)))
-!          RHS(1:2*NNODE,1) = rhs_temp(1:2*NNODE) -
-!     1     matmul(kua(1:2*NNODE,1:4),matmul(kaainv(1:4,1:4),rhs_temp
-!     2     (2*NNODE+1:2*NNODE+4)))
           
+          ! Populate element stiffness matrix and right hand side vector
+          AMATRX(1:24,1:24) = AMATRX(1:2*NNODE,1:2*NNODE)
+     1     + matmul(transpose(B(1:9,1:24))
+     2      ,matmul(D(1:9,1:9),B(1:9,1:24)))*w(kint)*determinant
+          
+          RHS(1:24,1) = RHS(1:24,1) - matmul(transpose(B(1:9,1:24))
+     1     ,qvec(1:9))*w(kint)*determinant
+     
+          ! Update SVARS
+          SVARS(3*kint-2: 3*kint) = stress(1:3)
+
+      end do
           
       PNEWT = 1.d0
       
       return
       
 
-      END SUBROUTINE UELch
+      END SUBROUTINE UEL
