@@ -151,7 +151,8 @@
            stressNew(k,1:ntens) = sdevstar(1:ntens)
            stressNew(k,1:ndir) = stressNew(k,1:ndir) + skkstar/3.d0
            stateNew(k,1) = eplas
-           stateNew(k,2) = 0.d0
+           stateNew(k,2) = ta
+           stateNew(k,3) = 0.d0
            cycle
         endif
 
@@ -190,7 +191,7 @@
 
 !         f = sestar - c1 - 1.5d0*E*deplas/(1.d0+xnu)
 !         dfde = -c1*( 1.d0/(n*(e0+eplas+deplas)) + 1.d0/(m*deplas) )
-     &                                            - 1.5d0*E/(1.d0+xnu)
+!     &                                            - 1.5d0*E/(1.d0+xnu)
 
          deplas_new = deplas - f/dfde
          if (deplas_new<0.d0) then
@@ -214,7 +215,7 @@
      1              stressNew(k,1:ndir) + skkstar/3.d0
 
         stateNew(k,1) = eplas + deplas
-        stateNew(k,2) = dta
+        stateNew(k,2) = ta + dta
         stateNew(k,3) = deplas
 
       end do
