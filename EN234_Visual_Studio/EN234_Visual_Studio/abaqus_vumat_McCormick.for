@@ -40,6 +40,11 @@
        double precision E,xnu,Y,e0,m,n,edot0
        double precision f,dfde
        double precision eplas,deplas
+       double precision S, H, td, apha, Omega
+       double precision strain_hardening, dstrain_hardening
+       double precision solute_concentration
+       double precision ta, dta
+       double precision dva, dvb, dvc                    ! a dummy variable
 !
 !      Conventions for storing tensors:
 !
@@ -108,16 +113,21 @@
       xnu = props(2)
       Y = props(3)
       e0 = props(4)
-      n  = props(5)
+      m  = props(5)
       edot0 = props(6)
-      m = props(7)
+      S = props(7)
+      H = props(8)
+      td = props(9)
+      Omega = props(10)
+      alpha = props(11)
 
       ntens = ndir+nshr
 
       do k = 1,nblock
 
         eplas = stateOld(k,1)
-        deplas = stateOld(k,2)
+        ta    = stateOld(k,2)
+        deplas = stateOld(k,3)
 
         dedev(1:ndir) = strainInc(k,1:ndir)
      1                      - sum(strainInc(k,1:ndir))/3.d0
@@ -152,12 +162,34 @@
        tol = 1.d-6*Y
        if (deplas==0.d0) deplas = 1.d-09/Y
        do while (err>tol)
+           
+          ! calculate the strain hardening
+          strain_hardening = Y*(1.d0 + (eplas + deplas)/e0)**m
+          
+          ! caculate the increment in ta
+          dva = deplas/Omega
+          dta = (td/dva + ta*exp(-dva))/(1.d0 + exp(-dva)/dva)
+          
+          ! calculate the solute concentration
+          dvb = -((ta + dta)/td)**alpha
+          solute_concentration = 1.d0 - exp(dvb)
+          
+          ! define the function we want to solve using Newton-Raphson
+          f = (sestar/S) - ((1.5d0*E*deplas)/((1.d0 + xnu)*S))
+     1     -((strain_hardening*(eplas + deplas)/S) + 
+     2      (H*solute_concentration) + log(deplas/(td*edot0)))
+          
+          ! define the derivative of the function 
+          dstrain_hardening = (m*Y/e0)*(1.d0 + (eplas + deplas)/e0)**m
+          dfde = (1.5d0*E/(S*(1.d0 + xnu)))
+     1     - ((eplas + deplas)*dstrain_hardening/S)
+     2     - (strain_hardening/S) - (1.d0/deplas) 
 
-         c1 = Y*(1.d0 + (eplas + deplas)/e0)**(1.d0/n) *
-     &                                 (deplas/dt/edot0)**(1.d0/m)
+!         c1 = Y*(1.d0 + (eplas + deplas)/e0)**(1.d0/n) *
+!     &                                 (deplas/dt/edot0)**(1.d0/m)
 
-         f = sestar - c1 - 1.5d0*E*deplas/(1.d0+xnu)
-         dfde = -c1*( 1.d0/(n*(e0+eplas+deplas)) + 1.d0/(m*deplas) )
+!         f = sestar - c1 - 1.5d0*E*deplas/(1.d0+xnu)
+!         dfde = -c1*( 1.d0/(n*(e0+eplas+deplas)) + 1.d0/(m*deplas) )
      &                                            - 1.5d0*E/(1.d0+xnu)
 
          deplas_new = deplas - f/dfde
@@ -182,7 +214,8 @@
      1              stressNew(k,1:ndir) + skkstar/3.d0
 
         stateNew(k,1) = eplas + deplas
-        stateNew(k,2) = deplas
+        stateNew(k,2) = dta
+        stateNew(k,3) = deplas
 
       end do
 
