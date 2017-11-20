@@ -169,22 +169,22 @@
           
           ! caculate the increment in ta
           dva = deplas/Omega
-          dta = (td/dva + ta*exp(-dva))/(1.d0 + exp(-dva)/dva)
-          
+          dta = (dt/dva + ta*exp(-dva))/(1.d0 + exp(-dva)/dva)
+          dta = (dt - ta/Omega*deplas)/(1.d0+deplas/Omega)
           ! calculate the solute concentration
           dvb = -((ta + dta)/td)**alpha
           solute_concentration = 1.d0 - exp(dvb)
           
           ! define the function we want to solve using Newton-Raphson
           f = (sestar/S) - ((1.5d0*E*deplas)/((1.d0 + xnu)*S))
-     1     -((strain_hardening*(eplas + deplas)/S) + 
-     2      (H*solute_concentration) + log(deplas/(td*edot0)))
+     1     -((strain_hardening/S) + 
+     2      (H*solute_concentration) + log(deplas/(dt*edot0)))
           
           ! define the derivative of the function 
           dstrain_hardening = (m*Y/e0)*(1.d0 + (eplas + deplas)/e0)**m
           dfde = (1.5d0*E/(S*(1.d0 + xnu)))
      1     - ((eplas + deplas)*dstrain_hardening/S)
-     2     - (strain_hardening/S) - (1.d0/deplas) 
+     2      - (1.d0/deplas) 
 
 !         c1 = Y*(1.d0 + (eplas + deplas)/e0)**(1.d0/n) *
 !     &                                 (deplas/dt/edot0)**(1.d0/m)
