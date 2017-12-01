@@ -11,7 +11,7 @@
 !          abq_UEL_1D_integrationpoints(n_points, n_nodes, xi, w)  = defines integration points for 1D line integral
 !=========================== ABAQUS format user element subroutine ===================
 
-      SUBROUTINE UEL(RHS,AMATRX,SVARS,ENERGY,NDOFEL,NRHS,NSVARS,
+      SUBROUTINE UELch(RHS,AMATRX,SVARS,ENERGY,NDOFEL,NRHS,NSVARS,
      1     PROPS,NPROPS,COORDS,MCRD,NNODE,U,DU,V,A,JTYPE,TIME,DTIME,
      2     KSTEP,KINC,JELEM,PARAMS,NDLOAD,JDLTYP,ADLMAG,PREDEF,NPREDF,
      3     LFLAGS,MLVARX,DDLMAG,MDLOAD,PNEWDT,JPROPS,NJPROP,PERIOD)
@@ -120,7 +120,8 @@
       double precision  ::  strain(4)                         ! Strain vector contains [e11, e22, e33, 2e12, 2e13, 2e23]
       double precision  ::  stress(4)                         ! Stress vector contains [s11, s22, s33, s12, s13, s23]
       double precision  ::  Del(4,4)                          ! stress = D*(strain)  (NOTE FACTOR OF 2 in shear strain)
-      double precision  ::  B(9,24)                           ! strain = B*(dof_total)
+      double precision  ::  Dold(4,4) 
+      double precision  ::  B(9,24)                          ! strain = B*(dof_total)
       double precision  ::  dxidx(2,2), dxidxbar(2,2)         ! Jacobian inverse
       double precision  ::  determinant, determinantbar       ! determinant
       double precision  ::  E, xnu, D44, D11, D12             ! Material properties
@@ -129,7 +130,8 @@
       double precision  ::  D(9,9)                            ! New D matrix
       double precision  ::  SumD
       double precision  ::  qvec(9)                              ! qvec
-
+      double precision  ::  D13, D23
+      double precision  ::  C_Mu(6), dC_Mu(6,1)
     !
     !     Example ABAQUS UEL implementing 2D linear elastic elements
     !     Includes option for incompatible mode elements
@@ -152,6 +154,7 @@
       RHS(1:MLVARX,1) = 0.d0
       AMATRX(1:NDOFEL,1:NDOFEL) = 0.d0
       Del = 0.d0
+      Dold = 0.d0
       E = PROPS(1)
       xnu = PROPS(2)
       !New Diffusion-Related Parameters
@@ -162,13 +165,23 @@
       Theta = PROPS(7)
       !Define elasic D matrix outside the integration loop so that the Complete matrix can be assembled inside 
       D12 = xnu*E/( (1+xnu)*(1-2.D0*xnu) )
+!      D13 = 0
+!      D23 = 0
+      D44 = (1.D0-xnu)*E/( (1+xnu)*(1-2.D0*xnu) )      
+      Del(1,1) = (1.d0 - xnu)*E/( (1+xnu)*(1-2.D0*xnu) )
+      Del(2,2) = (1.d0 - xnu)*E/( (1+xnu)*(1-2.D0*xnu) )
+      Del(3,3) = D44
+      Del(1,2) = D12
+      Del(2,1) = D12
+      
+      !D12 = xnu*E/( (1+xnu)*(1-2.D0*xnu) )
       D11 = (1-xnu)*E/( (1+xnu)*(1-2.D0*xnu) )
       D44 = (1.D0-xnu)*E/( (1+xnu)*(1-2.D0*xnu) )
-      Del(1:3,1:2) = D12
-      Del(1,1) = D11
-      Del(2,2) = D11
-      Del(3,3) = D11
-      Del(4,4) = D44
+      Dold(1:3,1:3) = D12
+      Dold(1,1) = D11
+      Dold(2,2) = D11
+      Dold(3,3) = D11
+      Dold(4,4) = D44
       ! New D matrix
       D = 0.d0
       
@@ -200,7 +213,7 @@
           dxidxbar(2,1) = -dxdxibar(2,1)
           dxidxbar = dxidxbar/determinantbar
 
-          dNdx(1:NNODE,1:2) = matmul(dNdxi(1:NNODE,1:2),dxidx)
+          dNdxbar(1:NNODE,1:2) = dNdx(1:NNODE,1:2) !=matmul(dNdxi(1:NNODE,1:2),dxidx)
           
           ! Get dNdxbar
           
@@ -231,6 +244,8 @@
 !          B(1,22) =
           B(1,23) = dNdx(8,1)
 !          B(1,24) =
+!          B(1,25) = dNdx(9,1)
+!          B(1,26) =
           
 !          B(2,1)  =
           B(2,2)  = dNdx(1,2)
@@ -256,6 +271,9 @@
           B(2,22) = dNdx(7,2)
 !          B(2,23) =
           B(2,24) = dNdx(8,2)
+!          B(2,25) =
+!          B(2,26) = dNdx(9,2)
+          
           
           B(3,1)  = dNdx(1,2)
           B(3,2)  = dNdx(1,1)
@@ -281,6 +299,8 @@
           B(3,22) = dNdx(7,1)
           B(3,23) = dNdx(8,2)
           B(3,24) = dNdx(8,1)
+!          B(3,25) = dNdx(9,2)
+!          B(3,26) = dNdx(9,1)
           ! Mu and C related parts of the B Matrix
 !          B(4,1)  = 
 !          B(4,2)  =
@@ -434,55 +454,63 @@
 !          B(9,23) = 
 !          B(9,24) =
           
+          ! Calculate the concentration and chemical potential
+          C_Mu(1:6)  = matmul(B(4:9,1:24),U(1:24))
+          dC_Mu(1:6,1) = matmul(B(4:9,1:24),DU(1:24,1))
+          
           ! Define the Gibbs Free energy as a function of concentration
-          F = 2.d0*WGibbs*(U(5) - DU(5,1))
-     1     *((U(5) - DU(5,1)) - 1.d0)
-     2      *(2.d0*(U(5) - DU(5,1)) - 1.d0)
+          F = 2.d0*WGibbs*(C_Mu(2) - dC_Mu(2,1))
+     1     *((C_Mu(2) - dC_Mu(2,1)) - 1.d0)
+     2      *(2.d0*(C_Mu(2) - dC_Mu(2,1)) - 1.d0)
           
           ! Define the derivative of the Gibbs Free Energy
-          dFdc = WGibbs*(12.d0*U(5)**2.d0
-     1     - 12.d0*U(5) + 2.d0)
+          dFdc = WGibbs*(12.d0*C_Mu(2)**2.d0
+     1     - 12.d0*C_Mu(2) + 2.d0)
           
           ! Define the summation for D(4,5)
-          SumD = (1.d0/3.d0)*(D11 + D22 + D33 + 6.d0*D12)
+          SumD = (1.d0/9.d0)*(3.d0*D11 + 6.d0*D12)
           !Define the new D matrix
           D(1:3,1:3) = Del(1:3,1:3)
-          D(1,5) = (-1.d0/3.d0)*Omega*(D11 + 2.d0*D12)
-          D(2,5) = (-1.d0/3.d0)*Omega*(D22 + 2.d0*D12)
-          D(4,1) = (-1.d0/3.d0)*Omega*(D11 + 2.d0*D12)
-          D(4,2) = (-1.d0/3.d0)*Omega*(D22 + 2.d0*D12)
+          D(1,5) = (-1.d0/3.d0)*Omega*(Del(1,1) + 2.d0*D12)
+          D(2,5) = (-1.d0/3.d0)*Omega*(Del(2,2) + 2.d0*D12)
+          D(4,1) = (-1.d0/3.d0)*Omega*(Del(1,1) + 2.d0*D12)
+          D(4,2) = (-1.d0/3.d0)*Omega*(Del(2,2) + 2.d0*D12)
           D(4,4) = 1.d0
           D(4,5) = -dFdc + (Omega**2.d0)*SumD
+          D(5,5) = 1.d0/DTIME
           D(6,8) = -Kappa
           D(7,9) = -Kappa
           D(8,6) = Theta*Diffc
-          D(8,7) = Theta*Diffc
+          D(9,7) = Theta*Diffc
 
 
           ! Calculate the stress and strain 
-          strain(1:3) = matmul(B(1:3,1:24),U(1:24))
-          stress(1:3) = matmul(Del(1:3,1:3),strain(1:3))
+          strain(1:3) = matmul(B(1:3,1:24),U)
+          stress(1:4) = matmul(Dold(1:4,1:4),
+     1     [strain(1),strain(2),0.d0,strain(3)]
+     2           -Omega*c_Mu(2)*[1,1,1,0]/3.d0 )
+          
           
           ! Calculae vector q
           qvec = 0.d0
           qvec(1) = stress(1)
           qvec(2) = stress(2)
-          qvec(3) = stress(3)
+          qvec(3) = stress(4)
           
-          qvec(4) = U(4)
-     1     -(2.d0*WGibbs*U(5)
-     2      *(U(5) -1.d0)*(2.d0*U(5) -1.d0))
-     3       -Omega*(stress(1)+stress(2))
-          qvec(5) = DU(5,1)/DTIME
+          qvec(4) = C_Mu(1)
+     1     -(2.d0*WGibbs*C_Mu(2)
+     2      *(C_Mu(2) -1.d0)*(2.d0*C_MU(2) -1.d0))
+     3       -Omega*(stress(1)+stress(2) + stress(3))/3.d0
+          qvec(5) = dC_Mu(2,1)/DTIME
           
-          qvec(6) = -Kappa*(U(8))
-          qvec(7) = -Kappa*(U(9))
+          qvec(6) = -Kappa*(C_Mu(5) )
+          qvec(7) = -Kappa*(C_Mu(6) )
           
-          qvec(8) = Diffc*(U(6) + (Theta-1.d0)*DU(6,1))
-          qvec(9) = Diffc*(U(7) + (Theta-1.d0)*DU(7,1))
+          qvec(8) = Diffc*(C_Mu(3) + (Theta-1.d0)*dC_Mu(3,1))
+          qvec(9) = Diffc*(C_Mu(4) + (Theta-1.d0)*dC_Mu(4,1))
           
           ! Populate element stiffness matrix and right hand side vector
-          AMATRX(1:24,1:24) = AMATRX(1:2*NNODE,1:2*NNODE)
+          AMATRX(1:24,1:24) = AMATRX(1:24,1:24)
      1     + matmul(transpose(B(1:9,1:24))
      2      ,matmul(D(1:9,1:9),B(1:9,1:24)))*w(kint)*determinant
           
@@ -490,7 +518,8 @@
      1     ,qvec(1:9))*w(kint)*determinant
      
           ! Update SVARS
-          SVARS(3*kint-2: 3*kint) = stress(1:3)
+          SVARS(1:3) = stress(1:3)
+          !SVARS()
 
       end do
           
@@ -499,4 +528,4 @@
       return
       
 
-      END SUBROUTINE UEL
+      END SUBROUTINE UELch
