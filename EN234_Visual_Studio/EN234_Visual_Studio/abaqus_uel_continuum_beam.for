@@ -137,6 +137,7 @@
       double precision  ::  R(2,4)                            ! Rotation Matrix
       double precision  ::  epsilon_three(3)                  ! Temporary variable for strain vector
       double precision  ::  Strain_hat(2), Stress_hat(2)      ! Stress and Strain in new coordinate system
+      double precision  ::  xitrap(2,20)
 
     !
     !     Example ABAQUS UEL implementing 2D linear elastic elements
@@ -165,7 +166,7 @@
       E = PROPS(3)
       xnu = PROPS(4)
       h = PROPS(1)
-      w = PROPS(2)
+      width = PROPS(2)
       
       ! Calculate L
       delta_x = coords(1,2) - coords(1,1)
@@ -226,13 +227,13 @@
       D(2,2) = E/(2.d0*(1.d0+xnu))
       !SVARS(1:3) = 0.d0
 
-      call Trapazoidal_Integration_Points(wt)      
+      call Trapazoidal_Integration_Points(wt,xitrap)      
       Energy(1:8) = 0.d0
       
       do kint = 1, 20
 
           ! Get Laminar Basis Vectors
-          call abq_UEL_2D_shapefunctions([0,xitrap(kint)],4,N,dNdxi)
+          call abq_UEL_2D_shapefunctions(xitrap(1:2,kint),4,N,dNdxi)
           dxdxi = matmul(transpose(s_coords(1:4,1:2)),dNdxi(1:4,1:2))
           determinant = dxdxi(1,1)*dxdxi(2,2) - dxdxi(2,1)*dxdxi(1,2)
           dxidx(1,1) = dxdxi(2,2)
@@ -253,6 +254,7 @@
           
           ! Get R and B matrices
           B = 0.d0
+          dNdx(1:4,1:2) = matmul(dNdxi(1:4,1:2),dxidx)
           B(1,1:2*4-1:2) = dNdx(1:4,1)
           B(2,2:2*4:2) = dNdx(1:4, 2)
           B(3,1:2*4-1:2) = dNdx(1:4, 2)
@@ -295,10 +297,11 @@
      3       T(1:8,1:6)))))*wt(kint)
           
           call psi(kint,value)
-          SVARS(1) = SVARS(1) + width*h*5.d-1*Stress_hat(1)
-          SVARS(2) = SVARS(2) + width*h*5.d-1*Stress_hat(2)
-          SVARS(3) = SVARS(3) + width*h**2.d0*25.d-2*Stress_hat(1)*value
-     1     *wt(kint)
+          SVARS(1) = SVARS(1) + width*h*5.d-1*Stress_hat(1)*wt(kint)
+          SVARS(2) = SVARS(2) + width*h*5.d-1*Stress_hat(2)*wt(kint)
+          SVARS(3) = SVARS(3) + width*h**2.d0*25.d-2*Stress_hat(1)
+     1     *xitrap(2,kint)
+     2      *wt(kint)
       
           
       end do
@@ -320,12 +323,12 @@
       value = (1.d0/10.d0)*step - 1.d0
       end subroutine psi
 
-      subroutine Trapazoidal_Integration_Points(wt)
+      subroutine Trapazoidal_Integration_Points(wt,xitrap)
       
       implicit none
       
       double precision, intent(out) :: wt(*)
-      
+      double precision, intent(out) :: xitrap(2,*)
       wt(1)  = 1.d0/20.d0
       wt(2)  = 1.d0/10.d0
       wt(3)  = 1.d0/10.d0 
@@ -346,6 +349,49 @@
       wt(18) = 1.d0/10.d0
       wt(19) = 1.d0/10.d0
       wt(20) = 1.d0/20.d0
+      
+      xitrap(2,1)  = -1.d0
+      xitrap(2,2)  = -894.d-3
+      xitrap(2,3)  = -794.d-3
+      xitrap(2,4)  = -694.d-3
+      xitrap(2,5)  = -594.d-3
+      xitrap(2,6)  = -494.d-3
+      xitrap(2,7)  = -394.d-3
+      xitrap(2,8)  = -294.d-3
+      xitrap(2,9)  = -194.d-3
+      xitrap(2,10) = -94.d-2
+      xitrap(2,11) = 5.d-3
+      xitrap(2,12) = 105.d-3
+      xitrap(2,13) = 205.d-3
+      xitrap(2,14) = 305.d-3
+      xitrap(2,15) = 405.d-3
+      xitrap(2,16) = 505.d-3
+      xitrap(2,17) = 605.d-3
+      xitrap(2,18) = 705.d-3
+      xitrap(2,19) = 805.d-3
+      xitrap(2,20) = 905.d-3
+      
+      xitrap(1,1)  = 0.d0
+      xitrap(1,2)  = 0.d0
+      xitrap(1,3)  =0.d0
+      xitrap(1,4)  = 0.d0
+      xitrap(1,5)  = 0.d0
+      xitrap(1,6)  = 0.d0
+      xitrap(1,7)  = 0.d0
+      xitrap(1,8)  = 0.d0
+      xitrap(1,9)  = 0.d0
+      xitrap(1,10) = 0.d0
+      xitrap(1,11) = 0.d0
+      xitrap(1,12) = 0.d0
+      xitrap(1,13) = 0.d0
+      xitrap(1,14) = 0.d0
+      xitrap(1,15) = 0.d0
+      xitrap(1,16) =  0.d0
+      xitrap(1,17) = 0.d0
+      xitrap(1,18) = 0.d0
+      xitrap(1,19) = 0.d0
+      xitrap(1,20) = 0.d0
+
       
       end subroutine Trapazoidal_Integration_Points
       
