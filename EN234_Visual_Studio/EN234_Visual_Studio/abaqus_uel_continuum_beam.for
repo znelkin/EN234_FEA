@@ -159,6 +159,7 @@
       
       RHS(1:6,1) = 0.d0
       AMATRX(1:6,1:6) = 0.d0
+      SVARS(1:3) = 0.d0
       
       D = 0.d0
       E = PROPS(3)
@@ -223,16 +224,16 @@
       D = 0.d0
       D(1,1) = E
       D(2,2) = E/(2.d0*(1.d0+xnu))
-      SVARS(1:3) = 0.d0
+      !SVARS(1:3) = 0.d0
 
-      
+      call Trapazoidal_Integration_Points(wt)      
       Energy(1:8) = 0.d0
       
       do kint = 1, 20
-          call Trapazoidal_Integration_Points(wt)
+
           ! Get Laminar Basis Vectors
-          call abq_UEL_2D_shapefunctions(xi(1:2,4),4,N,dNdxi)
-          dxdxi = matmul(coords(1:2,1:4),dNdxi(1:4,1:2))
+          call abq_UEL_2D_shapefunctions([0,xitrap(kint)],4,N,dNdxi)
+          dxdxi = matmul(transpose(s_coords(1:4,1:2)),dNdxi(1:4,1:2))
           determinant = dxdxi(1,1)*dxdxi(2,2) - dxdxi(2,1)*dxdxi(1,2)
           dxidx(1,1) = dxdxi(2,2)
           dxidx(2,2) = dxdxi(1,1)
@@ -254,8 +255,8 @@
           B = 0.d0
           B(1,1:2*4-1:2) = dNdx(1:4,1)
           B(2,2:2*4:2) = dNdx(1:4, 2)
-          B(4,1:2*4-1:2) = dNdx(1:4, 2)
-          B(4,2:2*4:2) = dNdx(1:4, 1)
+          B(3,1:2*4-1:2) = dNdx(1:4, 2)
+          B(3,2:2*4:2) = dNdx(1:4, 1)
           
           R = 0.d0
           R(1,1) = e_hat_One(1)**2.d0
@@ -269,7 +270,7 @@
           
           ! Calculate Strain
           strain = 0.d0
-          strain(1:4) = matmul(B(1:4,1:8),matmul(T(1:8,1:6),U(1:6)))
+          strain(1:3) = matmul(B(1:3,1:8),matmul(T(1:8,1:6),U(1:6)))
           epsilon_three(1) = strain(1)
           epsilon_three(2) = strain(2)
           epsilon_three(3) = strain(3)
@@ -284,13 +285,13 @@
           
       
           RHS(1:6, 1) = RHS(1:6,1)
-     1       -width*L*h*5.d-1*matmul(transpose(matmul(R(1:2,1:4)
-     2        ,matmul(B(1:4,1:8),T(1:8,1:6)))),Stress_hat(1:2))*wt(kint)
+     1       -width*L*h*5.d-1*matmul(transpose(matmul(R(1:2,1:3)
+     2        ,matmul(B(1:3,1:8),T(1:8,1:6)))),Stress_hat(1:2))*wt(kint)
 
           
           AMATRX(1:6,1:6) = AMATRX(1:6,1:6) + width*L*h*5.d-1*matmul(
-     1     transpose(matmul(R(1:2,1:4),matmul(B(1:4,1:8),T(1:8,1:6)))),
-     2      matmul(D(1:2,1:2),matmul(R(1:2,1:4),matmul(B(1:4,1:8),
+     1     transpose(matmul(R(1:2,1:3),matmul(B(1:3,1:8),T(1:8,1:6)))),
+     2      matmul(D(1:2,1:2),matmul(R(1:2,1:3),matmul(B(1:3,1:8),
      3       T(1:8,1:6)))))*wt(kint)
           
           call psi(kint,value)
